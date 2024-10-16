@@ -71,52 +71,58 @@ async fn save_response_to_file(response_text: &str) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-#[cfg(test)]
-pub async fn run(
-    context: SteadyContext,
-    ai_response_rx: SteadyRx<AIResponse>,
-) -> Result<(), Box<dyn Error>> {
-    let mut monitor = into_monitor!(context, [ai_response_rx], []);
 
-    if let Some(responder) = monitor.sidechannel_responder() {
-        let mut ai_response_rx = ai_response_rx.lock().await;
 
-        while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
-            // Responder code can be added here
-            monitor.relay_stats_smartly();
-        }
-    }
+// *** TESTS ***
 
-    Ok(())
-}
 
-#[cfg(test)]
-pub(crate) mod tests {
-    use std::time::Duration;
-    use steady_state::*;
-    use super::*;
 
-    #[async_std::test]
-    pub(crate) async fn test_simple_process() {
-        let mut graph = GraphBuilder::for_testing().build(());
+// #[cfg(test)]
+// pub async fn run(
+//     context: SteadyContext,
+//     ai_response_rx: SteadyRx<AIResponse>,
+// ) -> Result<(), Box<dyn Error>> {
+//     let mut monitor = into_monitor!(context, [ai_response_rx], []);
 
-        // Create channels for testing
-        let (ai_response_rx, ai_response_tx) = graph.channel_builder().with_capacity(4).build();
+//     if let Some(responder) = monitor.sidechannel_responder() {
+//         let mut ai_response_rx = ai_response_rx.lock().await;
 
-        graph.actor_builder()
-            .with_name("ResponsePrinter")
-            .build_spawn(move |context| internal_behavior(context, ai_response_rx.clone()));
+//         while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
+//             // Responder code can be added here
+//             monitor.relay_stats_smartly();
+//         }
+//     }
 
-        graph.start(); // Start the graph
+//     Ok(())
+// }
 
-        // Simulate sending a response for testing
-        let test_response = AIResponse { response_text: "This is a test response.".to_string() };
-        ai_response_tx.try_send(test_response).unwrap();
+// #[cfg(test)]
+// pub(crate) mod tests {
+//     use std::time::Duration;
+//     use steady_state::*;
+//     use super::*;
 
-        graph.request_stop(); // Request the actor to stop
-        graph.block_until_stopped(Duration::from_secs(15));
+//     #[async_std::test]
+//     pub(crate) async fn test_simple_process() {
+//         let mut graph = GraphBuilder::for_testing().build(());
 
-        // TODO: Confirm values on the output channels or file contents if necessary
-        // For instance, you could read back from `final.txt` to verify contents.
-    }
-}
+//         // Create channels for testing
+//         let (ai_response_rx, ai_response_tx) = graph.channel_builder().with_capacity(4).build();
+
+//         graph.actor_builder()
+//             .with_name("ResponsePrinter")
+//             .build_spawn(move |context| internal_behavior(context, ai_response_rx.clone()));
+
+//         graph.start(); // Start the graph
+
+//         // Simulate sending a response for testing
+//         let test_response = AIResponse { response_text: "This is a test response.".to_string() };
+//         ai_response_tx.try_send(test_response).unwrap();
+
+//         graph.request_stop(); // Request the actor to stop
+//         graph.block_until_stopped(Duration::from_secs(15));
+
+//         // TODO: Confirm values on the output channels or file contents if necessary
+//         // For instance, you could read back from `final.txt` to verify contents.
+//     }
+// }

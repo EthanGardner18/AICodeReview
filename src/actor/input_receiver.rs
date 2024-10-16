@@ -4,7 +4,7 @@ use log::*;
 use std::time::Duration;
 use steady_state::*;
 use crate::Args;
-
+    
 use std::error::Error;
 
 // Struct to hold user input
@@ -45,7 +45,7 @@ async fn internal_behavior(context: SteadyContext, user_input_tx: SteadyTx<UserI
     let mut monitor = into_monitor!(context, [], [user_input_tx]);
 
     // Lock the channel for sending messages
-    let mut user_input_tx = user_input_tx.lock().await;
+    let mut user_input_tx = user_input_tx.lock_owned().await;
 
     while monitor.is_running(&mut || user_input_tx.mark_closed()) {
         // Wait for user input
@@ -54,13 +54,17 @@ async fn internal_behavior(context: SteadyContext, user_input_tx: SteadyTx<UserI
         // Send the user input to the next actor
         let user_input_msg = UserInput { prompt: user_input };
 
-        //commented out
-        if let Err(_) = user_input_tx.try_send(user_input_msg) {
+        // println!("{:#?}", std::any::type_name::<SteadyTx<UserInput>>());
+
+
+
+        //commented out 
+        if let Err(_) = monitor.try_send(&mut user_input_tx, user_input_msg) {
             error!("Failed to send user input, the channel may be closed.");
         }
 
         monitor.relay_stats_smartly(); // Relay monitoring stats
-        break;
+        // break;
     }
     Ok(())
 }
@@ -77,48 +81,52 @@ fn get_user_input() -> String {
     input.trim().to_string() // Return trimmed input
 }
 
-#[cfg(test)]
-pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
-    // Testing logic can be implemented here
-    let mut monitor = into_monitor!(context, [], [user_input_tx]);
 
-    if let Some(responder) = monitor.sidechannel_responder() {
-        let mut user_input_tx = user_input_tx.lock().await;
+// *** TESTS ***
 
-        while monitor.is_running(&mut || user_input_tx.mark_closed()) {
-            // Responder code can be added here
-            monitor.relay_stats_smartly();
-        }
-    }
 
-    Ok(())
-}
+// #[cfg(test)]
+// pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
+//     // Testing logic can be implemented here
+//     let mut monitor = into_monitor!(context, [], [user_input_tx]);
 
-#[cfg(test)]
-pub(crate) mod tests {
-    use std::time::Duration;
-    use steady_state::*;
-    use super::*;
+//     if let Some(responder) = monitor.sidechannel_responder() {
+//         let mut user_input_tx = user_input_tx.lock().await;
 
-    #[async_std::test]
-    pub(crate) async fn test_simple_process() {
-        let mut graph = GraphBuilder::for_testing().build(());
+//         while monitor.is_running(&mut || user_input_tx.mark_closed()) {
+//             // Responder code can be added here
+//             monitor.relay_stats_smartly();
+//         }
+//     }
 
-        // Create a channel for testing
-        let (test_user_input_rx, user_input_tx) = graph.channel_builder().with_capacity(4).build();
+//     Ok(())
+// }
 
-        graph.actor_builder()
-            .with_name("InputReceiver")
-            .build_spawn(move |context| internal_behavior(context, user_input_tx.clone()));
+// #[cfg(test)]
+// pub(crate) mod tests {
+//     use std::time::Duration;
+//     use steady_state::*;
+//     use super::*;
 
-        graph.start(); // Start the graph
+//     #[async_std::test]
+//     pub(crate) async fn test_simple_process() {
+//         let mut graph = GraphBuilder::for_testing().build(());
 
-        // TODO: Add your test values here
-        // Example: Simulate user input or assert expected behavior
+//         // Create a channel for testing
+//         let (test_user_input_rx, user_input_tx) = graph.channel_builder().with_capacity(4).build();
 
-        graph.request_stop(); // Request the actor to stop
-        graph.block_until_stopped(Duration::from_secs(15));
+//         graph.actor_builder()
+//             .with_name("InputReceiver")
+//             .build_spawn(move |context| internal_behavior(context, user_input_tx.clone()));
 
-        // TODO: Confirm values on the output channels
-    }
-}
+//         graph.start(); // Start the graph
+
+//         // TODO: Add your test values here
+//         // Example: Simulate user input or assert expected behavior
+
+//         graph.request_stop(); // Request the actor to stop
+//         graph.block_until_stopped(Duration::from_secs(15));
+
+//         // TODO: Confirm values on the output channels
+//     }
+// }

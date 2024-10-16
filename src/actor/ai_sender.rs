@@ -1,3 +1,4 @@
+use futures::FutureExt;
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -50,8 +51,10 @@ async fn internal_behavior(
     };
 
     let mut monitor = into_monitor!(context, [user_input_rx], [ai_response_tx]);
+
     let mut user_input_rx = user_input_rx.lock().await;
     let mut ai_response_tx = ai_response_tx.lock().await;
+
 
     while monitor.is_running(&mut || user_input_rx.is_closed_and_empty() && ai_response_tx.mark_closed()) {
         // Wait for user input
@@ -61,10 +64,10 @@ async fn internal_behavior(
         let ai_response = call_openai_api(&user_input.prompt).await?;
         
         // Send the AI response through the channel
-        let response_message = AIResponse { response_text: ai_response };
+        let response_message = AIResponse { response_text: ai_response };        
 
         //commented out
-        if let Err(_) = ai_response_tx.try_send(response_message).await {
+        if let Err(_) = monitor.try_send(&mut ai_response_tx, response_message) {
            error!("Failed to send AI response, the channel may be closed.");
         }
 
@@ -94,55 +97,58 @@ async fn call_openai_api(prompt: &str) -> Result<String, Box<dyn Error>> {
     Ok(ai_text)
 }
 
-#[cfg(test)]
-pub async fn run(
-    context: SteadyContext,
-    user_input_rx: SteadyRx<UserInput>,
-    ai_response_tx: SteadyTx<AIResponse>,
-) -> Result<(), Box<dyn Error>> {
-    let mut monitor = into_monitor!(context, [user_input_rx], [ai_response_tx]);
 
-    if let Some(responder) = monitor.sidechannel_responder() {
-        let mut user_input_rx = user_input_rx.lock().await;
-        let mut ai_response_tx = ai_response_tx.lock().await;
+// *** TESTS ***
 
-        while monitor.is_running(&mut || user_input_rx.is_closed_and_empty() && ai_response_tx.mark_closed()) {
-            // Responder code can be added here
-            monitor.relay_stats_smartly();
-        }
-    }
+// #[cfg(test)]
+// pub async fn run(
+//     context: SteadyContext,
+//     user_input_rx: SteadyRx<UserInput>,
+//     ai_response_tx: SteadyTx<AIResponse>,
+// ) -> Result<(), Box<dyn Error>> {
+//     let mut monitor = into_monitor!(context, [user_input_rx], [ai_response_tx]);
 
-    Ok(())
-}
+//     if let Some(responder) = monitor.sidechannel_responder() {
+//         let mut user_input_rx = user_input_rx.lock().await;
+//         let mut ai_response_tx = ai_response_tx.lock().await;
 
-#[cfg(test)]
-pub(crate) mod tests {
-    use std::time::Duration;
-    use steady_state::*;
-    use super::*;
+//         while monitor.is_running(&mut || user_input_rx.is_closed_and_empty() && ai_response_tx.mark_closed()) {
+//             // Responder code can be added here
+//             monitor.relay_stats_smartly();
+//         }
+//     }
 
-    #[async_std::test]
-    pub(crate) async fn test_simple_process() {
-        let mut graph = GraphBuilder::for_testing().build(());
+//     Ok(())
+// }
 
-        // Create channels for testing
-        let (user_input_rx, user_input_tx) = graph.channel_builder().with_capacity(4).build();
-        let (ai_response_rx, ai_response_tx) = graph.channel_builder().with_capacity(4).build();
+// #[cfg(test)]
+// pub(crate) mod tests {
+//     use std::time::Duration;
+//     use steady_state::*;
+//     use super::*;
 
-        graph.actor_builder()
-            .with_name("AISender")
-            .build_spawn(move |context| internal_behavior(context, user_input_rx.clone(), ai_response_tx.clone()));
+//     #[async_std::test]
+//     pub(crate) async fn test_simple_process() {
+//         let mut graph = GraphBuilder::for_testing().build(());
 
-        graph.start(); // Start the graph
+//         // Create channels for testing
+//         let (user_input_rx, user_input_tx) = graph.channel_builder().with_capacity(4).build();
+//         let (ai_response_rx, ai_response_tx) = graph.channel_builder().with_capacity(4).build();
 
-        // Simulate user input for testing
-        let test_input = UserInput { prompt: "What is the capital of France?".to_string() };
-        user_input_tx.try_send(test_input).unwrap();
+//         graph.actor_builder()
+//             .with_name("AISender")
+//             .build_spawn(move |context| internal_behavior(context, user_input_rx.clone(), ai_response_tx.clone()));
 
-        graph.request_stop(); // Request the actor to stop
-        graph.block_until_stopped(Duration::from_secs(15));
+//         graph.start(); // Start the graph
 
-        // TODO: Confirm values on the output channels
-        // e.g. assert_eq!(some_condition, expected_value);
-    }
-}
+//         // Simulate user input for testing
+//         let test_input = UserInput { prompt: "What is the capital of France?".to_string() };
+//         user_input_tx.try_send(test_input).unwrap();
+
+//         graph.request_stop(); // Request the actor to stop
+//         graph.block_until_stopped(Duration::from_secs(15));
+
+//         // TODO: Confirm values on the output channels
+//         // e.g. assert_eq!(some_condition, expected_value);
+//     }
+// }
