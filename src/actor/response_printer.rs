@@ -35,11 +35,11 @@ async fn internal_behavior(
     ai_response_rx: SteadyRx<AIResponse>,
 ) -> Result<(), Box<dyn Error>> {
     let cli_args = context.args::<Args>();
-    let mut state = if let Some(args) = cli_args {
-        ResponseprinterInternalState::new(args)
-    } else {
-        ResponseprinterInternalState::default()
-    };
+    // let mut state = if let Some(args) = cli_args {
+    //     ResponseprinterInternalState::new(args)
+    // } else {
+    //     ResponseprinterInternalState::default()
+    // };
 
     let mut monitor = into_monitor!(context, [ai_response_rx], []);
     let mut ai_response_rx = ai_response_rx.lock().await;
@@ -50,14 +50,68 @@ async fn internal_behavior(
         // Read AI response
         let ai_response = monitor.try_take(&mut ai_response_rx).ok_or("No AI response received")?;
 
+        print!("AI RESPONSE: {:?}", ai_response.response_text); 
+
         // Save the AI response to a file
-        save_response_to_file(&ai_response.response_text).await?;
+        let _ = save_response_to_file(&ai_response.response_text).await;
 
         monitor.relay_stats_smartly();
         // break;
     }
     Ok(())
 }
+
+
+
+// async fn internal_behavior(
+//     context: SteadyContext,
+//     ai_response_rx: SteadyRx<AIResponse>,  // Channel to receive AI response from ai_sender
+// ) -> Result<(), Box<dyn Error>> {
+//     let mut monitor = into_monitor!(context, [ai_response_rx], []);
+//     let mut ai_response_rx = ai_response_rx.lock().await;
+//     let mut buffer: [AIResponse; 1000] = core::array::from_fn(|_| AIResponse::default());
+
+//     while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
+//         let _clean = wait_for_all!(
+//             monitor.wait_avail_units(&mut ai_response_rx, 1)  // Wait for at least 1 AI response
+//         );
+
+//         let count = monitor.try_peek_slice(&mut ai_response_rx, &mut buffer);
+//         if count > 0 {
+//             let ai_response = &buffer[count - 1];  // Get the last AI response
+            
+//             // Debug: Print the response we are writing to a file
+//             print!("response_printer: Writing to file: {}", ai_response.response_text);
+
+//             // Consume the response from the response channel
+//             monitor.take_slice(&mut ai_response_rx, &mut buffer[0..count]);
+
+//             monitor.relay_stats_smartly();
+//         } else {
+//             print!("response_printer: No AI response received");
+//         }
+//     }
+//     Ok(())
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Function to save AI response to a text file
 async fn save_response_to_file(response_text: &str) -> Result<(), Box<dyn Error>> {
@@ -73,28 +127,30 @@ async fn save_response_to_file(response_text: &str) -> Result<(), Box<dyn Error>
 
 
 
+
+
+
+#[cfg(test)]
+pub async fn run(
+    context: SteadyContext,
+    ai_response_rx: SteadyRx<AIResponse>,
+) -> Result<(), Box<dyn Error>> {
+    let mut monitor = into_monitor!(context, [ai_response_rx], []);
+
+    if let Some(responder) = monitor.sidechannel_responder() {
+        let mut ai_response_rx = ai_response_rx.lock().await;
+
+        while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
+            // Responder code can be added here
+            monitor.relay_stats_smartly();
+        }
+    }
+
+    Ok(())
+}
+
 // *** TESTS ***
 
-
-
-// #[cfg(test)]
-// pub async fn run(
-//     context: SteadyContext,
-//     ai_response_rx: SteadyRx<AIResponse>,
-// ) -> Result<(), Box<dyn Error>> {
-//     let mut monitor = into_monitor!(context, [ai_response_rx], []);
-
-//     if let Some(responder) = monitor.sidechannel_responder() {
-//         let mut ai_response_rx = ai_response_rx.lock().await;
-
-//         while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
-//             // Responder code can be added here
-//             monitor.relay_stats_smartly();
-//         }
-//     }
-
-//     Ok(())
-// }
 
 // #[cfg(test)]
 // pub(crate) mod tests {

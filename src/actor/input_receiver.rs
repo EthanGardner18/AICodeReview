@@ -9,6 +9,7 @@ use std::error::Error;
 
 // Struct to hold user input
 #[derive(Default)]
+#[derive(Debug)]
 pub(crate) struct UserInput {
     pub prompt: String, // User input prompt
 }
@@ -33,13 +34,15 @@ pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> 
     internal_behavior(context, user_input_tx).await
 }
 
+// const BUFFER_SIZE:usize = 1000;
+
 async fn internal_behavior(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
     let cli_args = context.args::<Args>();
-    let mut state = if let Some(args) = cli_args {
-        InputReceiverInternalState::new(args)
-    } else {
-        InputReceiverInternalState::default()
-    };
+    // let mut state = if let Some(args) = cli_args {
+    //     InputReceiverInternalState::new(args)
+    // } else {
+    //     InputReceiverInternalState::default()
+    // };
 
     // Monitor for channel traffic
     let mut monitor = into_monitor!(context, [], [user_input_tx]);
@@ -53,18 +56,25 @@ async fn internal_behavior(context: SteadyContext, user_input_tx: SteadyTx<UserI
 
         // Send the user input to the next actor
         let user_input_msg = UserInput { prompt: user_input };
+        //let user_input_msg = user_input;
+
 
         // println!("{:#?}", std::any::type_name::<SteadyTx<UserInput>>());
 
 
-
-        //commented out 
-        if let Err(_) = monitor.try_send(&mut user_input_tx, user_input_msg) {
-            error!("Failed to send user input, the channel may be closed.");
+        println!("READY TO SEND: {:?}", user_input_msg.prompt);
+        // Send the user input through the channel
+        match monitor.try_send(&mut user_input_tx, user_input_msg) {
+            Ok(_) => print!("Successfully sent user input."),
+            Err(err) => print!("Failed to send user input: {:?}", err),
         }
 
+        // let _ = monitor.try_send(&mut user_input_tx, user_input_msg);
+        // user_input_tx.mark_closed();
+
         monitor.relay_stats_smartly(); // Relay monitoring stats
-        // break;
+        // user_input_tx.mark_closed();
+        //break;
     }
     Ok(())
 }
@@ -82,25 +92,27 @@ fn get_user_input() -> String {
 }
 
 
+
+
+#[cfg(test)]
+pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
+    // Testing logic can be implemented here
+    let mut monitor = into_monitor!(context, [], [user_input_tx]);
+
+    if let Some(responder) = monitor.sidechannel_responder() {
+        let mut user_input_tx = user_input_tx.lock().await;
+
+        while monitor.is_running(&mut || user_input_tx.mark_closed()) {
+            // Responder code can be added here
+            monitor.relay_stats_smartly();
+        }
+    }
+
+    Ok(())
+}
+
 // *** TESTS ***
 
-
-// #[cfg(test)]
-// pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
-//     // Testing logic can be implemented here
-//     let mut monitor = into_monitor!(context, [], [user_input_tx]);
-
-//     if let Some(responder) = monitor.sidechannel_responder() {
-//         let mut user_input_tx = user_input_tx.lock().await;
-
-//         while monitor.is_running(&mut || user_input_tx.mark_closed()) {
-//             // Responder code can be added here
-//             monitor.relay_stats_smartly();
-//         }
-//     }
-
-//     Ok(())
-// }
 
 // #[cfg(test)]
 // pub(crate) mod tests {

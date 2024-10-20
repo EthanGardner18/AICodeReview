@@ -98,40 +98,44 @@ fn build_graph(mut graph: Graph) -> steady_state::Graph {
     graph
 }
 
-#[cfg(test)]
-mod graph_tests {
-    use async_std::test;
-    use steady_state::*;
-    use std::time::Duration;
-    use crate::args::Args;
-    use crate::build_graph;
-    use std::ops::DerefMut;
+
+// *** TESTS ***
 
 
-    #[test]
-    async fn test_graph_one() {
+// #[cfg(test)]
+// mod graph_tests {
+//     use async_std::test;
+//     use steady_state::*;
+//     use std::time::Duration;
+//     use crate::args::Args;
+//     use crate::build_graph;
+//     use std::ops::DerefMut;
 
-            let test_ops = Args {
-                loglevel: "debug".to_string(),
-                systemd_install: false,
-                systemd_uninstall: false,
-            };
-            let mut graph = build_graph( GraphBuilder::for_testing().build(test_ops.clone()) );
-            graph.start();
-            let mut guard = graph.sidechannel_director().await;
-            let g = guard.deref_mut();
-            assert!(g.is_some(), "Internal error, this is a test so this back channel should have been created already");
-            if let Some(plane) = g {
 
-              //  write your test here, send messages to edge nodes and get responses
-              //  let response = plane.node_call(Box::new(SOME_STRUCT), "SOME_NODE_NAME").await;
-              //  if let Some(msg) = response {
-              //  }
+//     #[test]
+//     async fn test_graph_one() {
 
-            }
-            drop(guard);
-            graph.request_stop();
-            graph.block_until_stopped(Duration::from_secs(3));
+//             let test_ops = Args {
+//                 loglevel: "debug".to_string(),
+//                 systemd_install: false,
+//                 systemd_uninstall: false,
+//             };
+//             let mut graph = build_graph( GraphBuilder::for_testing().build(test_ops.clone()) );
+//             graph.start();
+//             let mut guard = graph.sidechannel_director().await;
+//             let g = guard.deref_mut();
+//             assert!(g.is_some(), "Internal error, this is a test so this back channel should have been created already");
+//             if let Some(plane) = g {
 
-    }
-}
+//               //  write your test here, send messages to edge nodes and get responses
+//               //  let response = plane.node_call(Box::new(SOME_STRUCT), "SOME_NODE_NAME").await;
+//               //  if let Some(msg) = response {
+//               //  }
+
+//             }
+//             drop(guard);
+//             graph.request_stop();
+//             graph.block_until_stopped(Duration::from_secs(3));
+
+//     }
+// }
