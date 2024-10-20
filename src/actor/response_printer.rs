@@ -34,101 +34,59 @@ async fn internal_behavior(
     context: SteadyContext,
     ai_response_rx: SteadyRx<AIResponse>,
 ) -> Result<(), Box<dyn Error>> {
-    let cli_args = context.args::<Args>();
-    // let mut state = if let Some(args) = cli_args {
-    //     ResponseprinterInternalState::new(args)
-    // } else {
-    //     ResponseprinterInternalState::default()
-    // };
 
+    // Get any command-line arguments passed to the program
+    let cli_args = context.args::<Args>();
+
+    // Initialize the internal state of the ResponsePrinter based on the command-line arguments (if provided),
+    // or use default values if no arguments are passed.
+    let mut state = if let Some(args) = cli_args {
+        ResponseprinterInternalState::new(args)
+    } else {
+        ResponseprinterInternalState::default()
+    };
+
+    // Create a monitor to handle incoming AI responses
     let mut monitor = into_monitor!(context, [ai_response_rx], []);
+
+    // Lock the AI response channel to ensure safe access
     let mut ai_response_rx = ai_response_rx.lock().await;
 
+    // Main loop that runs while the monitor is active
     while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
+
+        // Wait until there is at least 1 AI response available to process
         let _clean = wait_for_all!(monitor.wait_avail_units(&mut ai_response_rx, 1));
 
-        // Read AI response
+        // Try to take an AI response from the receive channel
         let ai_response = monitor.try_take(&mut ai_response_rx).ok_or("No AI response received")?;
 
-        print!("AI RESPONSE: {:?}", ai_response.response_text); 
-
-        // Save the AI response to a file
+        // Save the AI response to a file by calling the save_response_to_file function
         let _ = save_response_to_file(&ai_response.response_text).await;
 
+        // Relay monitoring statistics (for debugging or performance tracking)
         monitor.relay_stats_smartly();
-        // break;
     }
     Ok(())
 }
 
 
-
-// async fn internal_behavior(
-//     context: SteadyContext,
-//     ai_response_rx: SteadyRx<AIResponse>,  // Channel to receive AI response from ai_sender
-// ) -> Result<(), Box<dyn Error>> {
-//     let mut monitor = into_monitor!(context, [ai_response_rx], []);
-//     let mut ai_response_rx = ai_response_rx.lock().await;
-//     let mut buffer: [AIResponse; 1000] = core::array::from_fn(|_| AIResponse::default());
-
-//     while monitor.is_running(&mut || ai_response_rx.is_closed_and_empty()) {
-//         let _clean = wait_for_all!(
-//             monitor.wait_avail_units(&mut ai_response_rx, 1)  // Wait for at least 1 AI response
-//         );
-
-//         let count = monitor.try_peek_slice(&mut ai_response_rx, &mut buffer);
-//         if count > 0 {
-//             let ai_response = &buffer[count - 1];  // Get the last AI response
-            
-//             // Debug: Print the response we are writing to a file
-//             print!("response_printer: Writing to file: {}", ai_response.response_text);
-
-//             // Consume the response from the response channel
-//             monitor.take_slice(&mut ai_response_rx, &mut buffer[0..count]);
-
-//             monitor.relay_stats_smartly();
-//         } else {
-//             print!("response_printer: No AI response received");
-//         }
-//     }
-//     Ok(())
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Function to save AI response to a text file
+// Function to save the AI response to a text file
 async fn save_response_to_file(response_text: &str) -> Result<(), Box<dyn Error>> {
-    let file_path = "final.txt";
+
+    let file_path = "final.txt"; // Define the file path where responses will be saved
+
+    // Open the file in append mode, create it if it doesn't exist
     let mut file = OpenOptions::new()
         .create(true) // Create the file if it doesn't exist
         .append(true) // Append to the file
         .open(file_path)?;
 
-    writeln!(file, "{}", response_text)?; // Write the response to the file
+     // Write the AI response to the file, followed by a newline
+    writeln!(file, "{}", response_text)?;
+    
     Ok(())
 }
-
-
-
-
-
 
 #[cfg(test)]
 pub async fn run(

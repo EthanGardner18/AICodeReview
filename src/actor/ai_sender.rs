@@ -8,8 +8,7 @@ use crate::Args;
 use crate::actor::input_receiver::UserInput;
 use std::error::Error;
 
-use reqwest::Client;
-use reqwest::header::{CONTENT_TYPE, AUTHORIZATION};
+use surf::Client;
 use serde_json::json;
 
 
@@ -46,156 +45,86 @@ async fn internal_behavior(
     user_input_rx: SteadyRx<UserInput>,
     ai_response_tx: SteadyTx<AIResponse>,
 ) -> Result<(), Box<dyn Error>> {
-    let cli_args = context.args::<Args>();
-    // let mut state = if let Some(args) = cli_args {
-    //     AisenderInternalState::new(args)
-    // } else {
-    //     AisenderInternalState::default()
-    // };
 
+    // Get any command-line arguments passed to the program
+    let cli_args = context.args::<Args>();
+
+    // Set the initial state of the AI sender based on the command-line arguments (if provided), or use default values
+    let mut state = if let Some(args) = cli_args {
+        AisenderInternalState::new(args)
+    } else {
+        AisenderInternalState::default()
+    };
+
+    // Create a monitor to handle channel traffic between user input and AI response
     let mut monitor = into_monitor!(context, [user_input_rx], [ai_response_tx]);
 
+    // Lock the user input and AI response channels to ensure safe access across multiple tasks
     let mut user_input_rx = user_input_rx.lock().await;
     let mut ai_response_tx = ai_response_tx.lock().await;
 
-
+    // Main loop that runs while the monitor is active
     while monitor.is_running(&mut || user_input_rx.is_closed_and_empty() && ai_response_tx.mark_closed()) {
-        // Wait for user input
-        
-        // let user_input = monitor.try_peek(&mut user_input_rx);
-        // println!("SENT TO API: {}", user_input.prompt);
 
-
+        // Wait until both input (user_input_rx) and output (ai_response_tx) are available
         let _clean = wait_for_all!(
-            monitor.wait_avail_units(&mut user_input_rx,1),
-            monitor.wait_vacant_units(&mut ai_response_tx,1)
-           );
+            monitor.wait_avail_units(&mut user_input_rx,1), // Wait for available input
+            monitor.wait_vacant_units(&mut ai_response_tx,1)  // Wait for space to send AI response
+        );
 
+        // Try to take the user input from the receive channel, if none is available, return an error
         let user_input = monitor.try_take(&mut user_input_rx).ok_or("No user input received")?;
 
+        // API key for OpenAI (this should ideally be stored securely)
+        let api_key = "[API-KEY-HERE]";
 
-        // let user_input = monitor.peek_async(&mut user_input_rx);
-
-        println!("\nAI RESPONSE: {:?}", user_input);
-
-        let api_key = "[API_KEY]";
-
-        // Call OpenAI API with the user input
-        let ai_response = match call_openai_api(&user_input.prompt, api_key).await {
-            Ok(response) => response,  // Save response into variable
-            Err(err) => {
-                eprintln!("Error calling OpenAI API: {}", err);
-                continue; // Skip this iteration on error
-            }
-        };        // print!("AI RESPONSE: {}", ai_response);
+        // Call the OpenAI API with the user input prompt and get the response
+        let ai_response = call_openai_api(&user_input.prompt, api_key).await?;
         
-        // Send the AI response through the channel
+        // Create a message to send to the next actor with the AI's response
         let response_message = AIResponse { response_text: ai_response };   
 
-        // println!("AI RESPONSE: {}", response_message.response_text);
-
-        // let response_message: AIResponse = AIResponse { response_text: String::from("TEST") };   
-
-
-        //commented out
+        // Try to send the AI response through the ai_response_tx channel
         match monitor.try_send(&mut ai_response_tx, response_message) {
-            Ok(_) => print!("Successfully sent user input."),
-            Err(err) => print!("Failed to send user input: {:?}", err),
+            Ok(_) => print!("\nSuccessfully sent ai output.\n"),
+            Err(err) => print!("\nFailed to send user input: {:?}\n", err),
         }
 
-
+        // Relay monitoring statistics for debugging/performance analysis
         monitor.relay_stats_smartly(); // Relay monitoring stats
-        // break;
     }
     Ok(())
 }
 
-
-// async fn internal_behavior(
-//     context: SteadyContext,
-//     user_input_rx: SteadyRx<UserInput>,  // Channel to receive user input from input_receiver
-//     ai_response_tx: SteadyTx<AIResponse>, // Channel to send AI response to response_printer
-// ) -> Result<(), Box<dyn Error>> {
-//     let mut monitor = into_monitor!(context, [user_input_rx], [ai_response_tx]);
-//     let mut user_input_rx = user_input_rx.lock().await;
-//     let mut ai_response_tx = ai_response_tx.lock().await;
-
-//     let mut buffer: [UserInput; 1000] = core::array::from_fn(|_| UserInput::default());
-
-//     while monitor.is_running(&mut || user_input_rx.is_closed_and_empty() && ai_response_tx.mark_closed()) {
-//         // Wait for user input and response availability
-//         let _clean = wait_for_all!(
-//             monitor.wait_avail_units(&mut user_input_rx, 1),   // Wait for at least 1 user input
-//             monitor.wait_vacant_units(&mut ai_response_tx, 1)  // Wait for space in response channel
-//         );
-
-//         let count = monitor.try_peek(&mut user_input_rx);
-//         if matches!(count, Some(T)){
-//             // Debug: Log that we received user input
-//             print!("ai_sender: Received user input");
-
-//             //let user_input = &buffer[count - 1];  // Get the last user input from the buffer
-            
-//             // Call OpenAI API (simulated here for brevity)
-//             let ai_response_text = format!("Response to '{}'", user_input.prompt);
-
-//             // Debug: Log the AI response
-//             print!("ai_sender: Sending AI response: {}", ai_response_text);
-
-//             // Prepare the AI response
-//             let ai_response = AIResponse { response_text: ai_response_text };
-
-//             // Send the AI response through the channel to response_printer
-//             let _ = monitor.try_send(&mut ai_response_tx, ai_response).expect("Failed to send AI response");
-
-//             // Consume the user input from the input channel
-//             monitor.take_slice(&mut user_input_rx, &mut buffer[0..count]);
-            
-//             monitor.relay_stats_smartly();
-//         } else {
-//             print!("ai_sender: No user input received");
-//         }
-//     }
-//     Ok(())
-// }
-
-
-
-
-
-
-// Function to call OpenAI API and retrieve a response
+// Function to call the OpenAI API asynchronously and get a response
 pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
-    // Initialize the async HTTP client
+
+    // Create an HTTP client using the surf crate
     let client = Client::new();
 
-    println!("Starting API COMM");
+    // Send the request to the OpenAI API
+    let mut response = client
+        .post("https://api.openai.com/v1/chat/completions")  // API endpoint for OpenAI
+        .header("Authorization", format!("Bearer {}", api_key)) // Add authorization header with the API key
+        .header("Content-Type", "application/json") // Set the request content type to JSON
+        .body(surf::Body::from_json(&json!({ // Create the JSON request body
+            "model": "gpt-3.5-turbo", // Specify the AI model
+            "messages": [{"role": "user", "content": prompt}], // Include the user's prompt
+            "max_tokens": 100 // Limit the number of response tokens
+        }))?)
+        .await?; // Await the response from the API
 
-    // Send the request to OpenAI API asynchronously
-    let response = client
-        .post("https://api.openai.com/v1/chat/completions")  // Correct endpoint for GPT-3.5-turbo
-        .header(AUTHORIZATION, format!("Bearer {}", api_key))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&json!({
-            "model": "gpt-3.5-turbo",  // Specify the model
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 100           // Limit response length
-        }))
-        .send()
-        .await?      // Await the request to complete asynchronously
-        .json::<serde_json::Value>()  // Parse the response as JSON
-        .await?;    // Await the JSON parsing to complete
+    // Parse the response as JSON
+    let response_json: serde_json::Value = response.body_json().await?;
 
-    println!("Finishing API COMM");
+    // Extract the AI's response content from the JSON response
+    let response_content = match response_json["choices"][0]["message"]["content"].as_str() {
+        Some(content) => content.to_string(),
+        None => "No response received.".to_string(),
+    };
 
-    // Extract the response content from the JSON structure
-    if let Some(content) = response["choices"][0]["message"]["content"].as_str() {
-        Ok(content.trim().to_string())  // Return the response text
-    } else {
-        Err("No valid response received from OpenAI".into())  // Handle error if no response
-    }
+    Ok(response_content)
 }
-
 
 
 #[cfg(test)]

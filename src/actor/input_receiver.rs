@@ -34,64 +34,65 @@ pub async fn run(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> 
     internal_behavior(context, user_input_tx).await
 }
 
-// const BUFFER_SIZE:usize = 1000;
-
 async fn internal_behavior(context: SteadyContext, user_input_tx: SteadyTx<UserInput>) -> Result<(), Box<dyn Error>> {
+    // Retrieve command-line arguments (if any) and create an initial state for the input receiver
     let cli_args = context.args::<Args>();
-    // let mut state = if let Some(args) = cli_args {
-    //     InputReceiverInternalState::new(args)
-    // } else {
-    //     InputReceiverInternalState::default()
-    // };
 
-    // Monitor for channel traffic
+
+    let mut state = if let Some(args) = cli_args {
+        // If arguments are provided, create a new state based on those arguments
+        InputReceiverInternalState::new(args)
+    } else {
+        // Otherwise, use the default state
+        InputReceiverInternalState::default()
+    };
+
+    // Set up a monitor to watch for channel activity (user_input_tx) from within the context
     let mut monitor = into_monitor!(context, [], [user_input_tx]);
 
-    // Lock the channel for sending messages
+    // Lock the user_input_tx channel for sending messages (owned lock for full access)
     let mut user_input_tx = user_input_tx.lock_owned().await;
 
+    // Loop to keep processing while the monitor is running
     while monitor.is_running(&mut || user_input_tx.mark_closed()) {
-        // Wait for user input
-        let user_input = get_user_input(); // Implement this function to read user input
 
-        // Send the user input to the next actor
+        // Wait for user input (this is an asynchronous call to get input from the user)
+        let user_input = get_user_input().await; // Implement this function to read user input
+
+        // Create a message to be sent to the next actor using the user's input
         let user_input_msg = UserInput { prompt: user_input };
-        //let user_input_msg = user_input;
-
-
-        // println!("{:#?}", std::any::type_name::<SteadyTx<UserInput>>());
-
-
-        println!("READY TO SEND: {:?}", user_input_msg.prompt);
-        // Send the user input through the channel
+        
+        // Try sending the message through the user_input_tx channel
         match monitor.try_send(&mut user_input_tx, user_input_msg) {
-            Ok(_) => print!("Successfully sent user input."),
-            Err(err) => print!("Failed to send user input: {:?}", err),
+            // If sending is successful, print a success message
+            Ok(_) => print!("\nSuccessfully sent user input.\n"),
+            // If sending fails, print an error message with the error details
+            Err(err) => print!("\nFailed to send user input: {:?}\n", err),
         }
 
-        // let _ = monitor.try_send(&mut user_input_tx, user_input_msg);
-        // user_input_tx.mark_closed();
-
+        // Relay the monitoring stats in a smart way (for performance tracking)
         monitor.relay_stats_smartly(); // Relay monitoring stats
-        // user_input_tx.mark_closed();
-        //break;
     }
     Ok(())
 }
 
-// Dummy function to simulate user input; replace with actual input handling logic
-fn get_user_input() -> String {
+async fn get_user_input() -> String {
+    // Import necessary modules for input/output
     use std::io::{self, Write};
 
     print!("Enter your input: ");
-    io::stdout().flush().unwrap(); // Ensure prompt is displayed immediately
+    // Flush the output to make sure the prompt is displayed immediately
+    io::stdout().flush().unwrap(); 
 
+    // Create a mutable string to hold the input
     let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap(); // Read user input
-    input.trim().to_string() // Return trimmed input
+
+    // Read the user's input from the standard input (stdin)
+    io::stdin().read_line(&mut input).unwrap(); 
+
+    // Remove any extra whitespace and return the cleaned-up input as a string
+    input.trim().to_string() 
 }
-
-
 
 
 #[cfg(test)]
