@@ -8,8 +8,10 @@ use crate::Args;
 use crate::actor::input_receiver::UserInput;
 use std::error::Error;
 
-use reqwest; // Add reqwest for HTTP requests
-use serde_json::json; // For building JSON payloads
+use reqwest::Client;
+use reqwest::header::{CONTENT_TYPE, AUTHORIZATION};
+use serde_json::json;
+
 
 #[derive(Default)]
 #[derive(Debug)]
@@ -76,11 +78,16 @@ async fn internal_behavior(
 
         println!("\nAI RESPONSE: {:?}", user_input);
 
-
+        let api_key = "[API_KEY]";
 
         // Call OpenAI API with the user input
-        let ai_response = call_openai_api(&user_input.prompt).await.unwrap();
-        // print!("AI RESPONSE: {}", ai_response);
+        let ai_response = match call_openai_api(&user_input.prompt, api_key).await {
+            Ok(response) => response,  // Save response into variable
+            Err(err) => {
+                eprintln!("Error calling OpenAI API: {}", err);
+                continue; // Skip this iteration on error
+            }
+        };        // print!("AI RESPONSE: {}", ai_response);
         
         // Send the AI response through the channel
         let response_message = AIResponse { response_text: ai_response };   
@@ -158,27 +165,35 @@ async fn internal_behavior(
 
 
 // Function to call OpenAI API and retrieve a response
-async fn call_openai_api(prompt: &str) -> Result<String, Box<dyn Error>> {
+pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
+    // Initialize the async HTTP client
+    let client = Client::new();
 
-    println!("Starting API Processing");
-    let api_key = "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"; // Replace with your OpenAI API key
-    let client = reqwest::Client::new();
-    let response = client.post("https://api.openai.com/v1/completions")
-        .bearer_auth(api_key)
+    println!("Starting API COMM");
+
+    // Send the request to OpenAI API asynchronously
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")  // Correct endpoint for GPT-3.5-turbo
+        .header(AUTHORIZATION, format!("Bearer {}", api_key))
+        .header(CONTENT_TYPE, "application/json")
         .json(&json!({
-            "model": "text-davinci-003", // Use your desired model
-            "prompt": prompt,
-            "max_tokens": 100, // Adjust as needed
+            "model": "gpt-3.5-turbo",  // Specify the model
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 100           // Limit response length
         }))
         .send()
-        .await?;
+        .await?      // Await the request to complete asynchronously
+        .json::<serde_json::Value>()  // Parse the response as JSON
+        .await?;    // Await the JSON parsing to complete
 
-    let response_json: serde_json::Value = response.json().await?;
-    let ai_text = response_json["choices"][0]["text"].as_str().unwrap_or("").to_string(); // Get the AI's response
+    println!("Finishing API COMM");
 
-    println!("AI REVIEW DONE");
-
-    Ok(ai_text)
+    // Extract the response content from the JSON structure
+    if let Some(content) = response["choices"][0]["message"]["content"].as_str() {
+        Ok(content.trim().to_string())  // Return the response text
+    } else {
+        Err("No valid response received from OpenAI".into())  // Handle error if no response
+    }
 }
 
 
