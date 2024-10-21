@@ -84,7 +84,7 @@ async fn save_response_to_file(response_text: &str) -> Result<(), Box<dyn Error>
 
      // Write the AI response to the file, followed by a newline
     writeln!(file, "{}", response_text)?;
-    
+
     Ok(())
 }
 
