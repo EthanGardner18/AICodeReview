@@ -76,7 +76,7 @@ async fn internal_behavior(
         let user_input = monitor.try_take(&mut user_input_rx).ok_or("No user input received")?;
 
         // API key for OpenAI (this should ideally be stored securely)
-        let api_key = "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";
+        let api_key = "[API-KEY]";
 
         // Call the OpenAI API with the user input prompt and get the response
         let ai_response = call_openai_api(&user_input.prompt, api_key).await?;
