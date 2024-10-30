@@ -10,10 +10,11 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::file_reader::RawFileData;
 
+#[derive(Debug)]
 
 #[derive(Default)]
 pub(crate) struct NumberedFileData {
-   dummy: u8 //TODO: : replace this and put your fields here
+   numbered_data: String //TODO: : replace this and put your fields here
 }
 
 
@@ -84,7 +85,9 @@ async fn internal_behavior(context: SteadyContext
           let file_data_struct = monitor.try_take(&mut file_content_rx).ok_or("No user input received")?;
 
           let file_data = file_data_struct.data;
-          let numbered_data = addLineNumbers(file_data);
+          let data_numbered = addLineNumbers(file_data);
+
+          let number_file_data = NumberedFileData { numbered_data: data_numbered};
         
 
 
@@ -92,7 +95,7 @@ async fn internal_behavior(context: SteadyContext
           let numbered_content_tx_ref: &mut Tx<NumberedFileData> = &mut numbered_content_tx;
 
         // Try to send the AI response through the ai_response_tx channel
-        match monitor.try_send(&mut ai_response_tx, response_message) {
+        match monitor.try_send(&mut numbered_content_tx, number_file_data) {
             Ok(_) => print!("\nSuccessfully sent ai output.\n"),
             Err(err) => print!("\nFailed to send user input: {:?}\n", err),
         }
