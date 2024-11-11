@@ -92,13 +92,8 @@ async fn internal_behavior(context: SteadyContext
 
           let response = ApiResponseData {
             response_data: call_openai_api(
-                "You will recieve a file of any coding language, the first line will have the path to the file you are looking at. I would like you to parse the code and only store a header for each function in this format. One issue you need to check for is that there are comments in the code, so you need to make sure you are starting at the correct line number and ending at the correct line number. Don't forget that different coding languages use different methods to comment things in and out. Also if you see a new line asssume it counts toward the total line number count. Finally if the function is within a class, give the class name:function name:
-
-                        {Function Name, Path, Starting Line Number, Last Line Number}
-If function is within a class
-{dataGen:load_data, /functions/main.py, 6, 14}
-{load_data, /functions/main.py, 6, 14}", 
-            "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"
+                "What is wrong with code :(", 
+            "API_KEY"
             ).await.unwrap()
           };
 

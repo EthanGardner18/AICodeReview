@@ -50,6 +50,7 @@ pub async fn run(context: SteadyContext
 
 //TODO : Stuck in infinite loop, make sure actor hears api_response_saver on channel
 //TODO : Potential error is the handling of the response from api_response_saver 
+//TODO : In browser connect to http://0.0.0.0:9100/ to see live telemetry data
 
 async fn internal_behavior(context: SteadyContext
         ,check_for_files_rx: SteadyRx<CheckForFiles>

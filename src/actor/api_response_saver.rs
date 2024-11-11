@@ -96,8 +96,7 @@ async fn internal_behavior(context: SteadyContext
       //    try_take<T>(&mut self, this: &mut Rx<T>) -> Option<T>  ie monitor.try_take(...
       //    try_send<T>(&mut self, this: &mut Tx<T>, msg: T) -> Result<(), T>  ie monitor.try_send(...
 
-
-
+      writeToFile(api_response_rx.response_data).await();
 
       let check = CheckForFiles {
         writeState: true
