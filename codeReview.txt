@@ -1,0 +1,36 @@
+1: import boto3
+2: import json
+3: 
+4: # Initialize Bedrock client with credentials
+5: def create_bedrock_client():
+6:     return boto3.client(
+7:         'bedrock-runtime',
+8:         region_name='us-east-1',  # Replace with your region
+9:         aws_access_key_id='AKIAZ3MGMXZCXS4J2IQN',  # Replace with your Access Key
+10:         aws_secret_access_key='+/Uahbufvc2Y3A+/+dmy7JiHxvcgwGpx7zU9DX5B'  # Replace with your Secret Key
+11:     )
+12: 
+13: # Function to send question to the Bedrock API
+14: def ask_bedrock(client, question):
+15:     response = client.invoke_model(
+16:         modelId='amazon.titan-text-express-v1',  # Replace with your Bedrock model ID
+17:         body=json.dumps({
+18:             "inputText": question
+19:         }),
+20:         contentType='application/json'
+21:     )
+22:     response_body = response['body'].read().decode('utf-8')
+23: 
+24:     result = json.loads(response_body)
+25: 
+26:     print("Full Response:", result)
+27: 
+28: if __name__ == "__main__":
+29:     # Get question from user
+30:     question = input("Enter your question: ")
+31: 
+32:     # Create the Bedrock client with credentials
+33:     bedrock_client = create_bedrock_client()
+34: 
+35:     # Send the question and get a response
+36:     ask_bedrock(bedrock_client, question)

@@ -14,7 +14,7 @@ use crate::actor::file_reader::RawFileData;
 
 #[derive(Default)]
 pub(crate) struct NumberedFileData {
-   numbered_data: String //TODO: : replace this and put your fields here
+   pub numbered_data: String //TODO: : replace this and put your fields here
 }
 
 

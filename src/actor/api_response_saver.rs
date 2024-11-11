@@ -14,10 +14,12 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+#[derive(Debug)]
+
 
 #[derive(Default)]
 pub(crate) struct CheckForFiles {
-   dummy: u8 //TODO: : replace this and put your fields here
+   writeState: bool //TODO: : replace this and put your fields here
 }
 
 
@@ -45,6 +47,8 @@ pub async fn run(context: SteadyContext
         ,check_for_files_tx: SteadyTx<CheckForFiles>) -> Result<(),Box<dyn Error>> {
   internal_behavior(context,api_response_rx,check_for_files_tx).await
 }
+
+// TODO: Code Stuck in infinite loop, make sure that api_response_saver is sending
 
 async fn internal_behavior(context: SteadyContext
         ,api_response_rx: SteadyRx<ApiResponseData>
@@ -92,7 +96,22 @@ async fn internal_behavior(context: SteadyContext
       //    try_take<T>(&mut self, this: &mut Rx<T>) -> Option<T>  ie monitor.try_take(...
       //    try_send<T>(&mut self, this: &mut Tx<T>, msg: T) -> Result<(), T>  ie monitor.try_send(...
 
+
+
+
+      let check = CheckForFiles {
+        writeState: true
+      };
+
+      match monitor.try_send(&mut check_for_files_tx, check) {
+        Ok(_) => print!("\nSuccessfully sent ai output.\n"),
+        Err(err) => print!("\nFailed to send user input: {:?}\n", err),
+    }
+     
+     
+     
      monitor.relay_stats_smartly();
+
 
     }
     Ok(())

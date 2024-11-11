@@ -48,6 +48,9 @@ pub async fn run(context: SteadyContext
   internal_behavior(context,check_for_files_rx,file_content_tx).await
 }
 
+//TODO : Stuck in infinite loop, make sure actor hears api_response_saver on channel
+//TODO : Potential error is the handling of the response from api_response_saver 
+
 async fn internal_behavior(context: SteadyContext
         ,check_for_files_rx: SteadyRx<CheckForFiles>
         ,file_content_tx: SteadyTx<RawFileData>) -> Result<(),Box<dyn Error>> {
@@ -81,6 +84,8 @@ async fn internal_behavior(context: SteadyContext
 
     if first {
         let _clean = wait_for_all!(monitor.wait_vacant_units(&mut file_content_tx,5)    );
+        first = false;
+
     }
 
      //TODO:  here are all the channels you can read from
@@ -99,7 +104,7 @@ async fn internal_behavior(context: SteadyContext
         let file_content_tx_ref: &mut Tx<RawFileData> = &mut file_content_tx;
 
         let file_data = RawFileData {  
-            data: readFileContents(&getFilePath(String::from("test/"))).unwrap()
+            data: readFileContents(&getFilePath(String::from("test/pythonTest.py"))).unwrap()
         };
 
         match monitor.try_send(&mut file_content_tx, file_data) {

@@ -1,4 +1,5 @@
 
+use futures::TryFutureExt;
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -13,9 +14,12 @@ use crate::actor::file_saver::SavedFileData;
 use surf::Client;
 use serde_json::json;
 
+#[derive(Debug)]
+
+
 #[derive(Default)]
 pub(crate) struct ApiResponseData {
-   dummy: u8 //TODO: : replace this and put your fields here
+   response_data: String //TODO: : replace this and put your fields here
 }
 
 
@@ -86,9 +90,27 @@ async fn internal_behavior(context: SteadyContext
      //TODO:  here are all the channels you can write to
           let api_response_tx_ref: &mut Tx<ApiResponseData> = &mut api_response_tx;
 
+          let response = ApiResponseData {
+            response_data: call_openai_api(
+                "You will recieve a file of any coding language, the first line will have the path to the file you are looking at. I would like you to parse the code and only store a header for each function in this format. One issue you need to check for is that there are comments in the code, so you need to make sure you are starting at the correct line number and ending at the correct line number. Don't forget that different coding languages use different methods to comment things in and out. Also if you see a new line asssume it counts toward the total line number count. Finally if the function is within a class, give the class name:function name:
+
+                        {Function Name, Path, Starting Line Number, Last Line Number}
+If function is within a class
+{dataGen:load_data, /functions/main.py, 6, 14}
+{load_data, /functions/main.py, 6, 14}", 
+            "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"
+            ).await.unwrap()
+          };
+
      //TODO:  to get started try calling the monitor.* methods:
       //    try_take<T>(&mut self, this: &mut Rx<T>) -> Option<T>  ie monitor.try_take(...
       //    try_send<T>(&mut self, this: &mut Tx<T>, msg: T) -> Result<(), T>  ie monitor.try_send(...
+
+
+      match monitor.try_send(&mut api_response_tx, response) {
+        Ok(_) => print!("\nSuccessfully sent ai output.\n"),
+        Err(err) => print!("\nFailed to send user input: {:?}\n", err),
+    }
 
      monitor.relay_stats_smartly();
 

@@ -14,9 +14,11 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+#[derive(Debug)]
+
 #[derive(Default)]
 pub(crate) struct SavedFileData {
-   dummy: u8 //TODO: : replace this and put your fields here
+   saved_data: String //TODO: : replace this and put your fields here
 }
 
 
@@ -84,14 +86,31 @@ async fn internal_behavior(context: SteadyContext
      //TODO:  here are all the channels you can read from
           let numbered_content_rx_ref: &mut Rx<NumberedFileData> = &mut numbered_content_rx;
 
+        let numbered_data_to_save = monitor.try_take(&mut numbered_content_rx).ok_or("No user input received")?;
+
+
      //TODO:  here are all the channels you can write to
           let saved_file_tx_ref: &mut Tx<SavedFileData> = &mut saved_file_tx;
+
+        let file_saved_data = SavedFileData {
+            saved_data: writeToFile(numbered_data_to_save.numbered_data),
+        };
+
+        
 
      //TODO:  to get started try calling the monitor.* methods:
       //    try_take<T>(&mut self, this: &mut Rx<T>) -> Option<T>  ie monitor.try_take(...
       //    try_send<T>(&mut self, this: &mut Tx<T>, msg: T) -> Result<(), T>  ie monitor.try_send(...
 
+
+      match monitor.try_send(&mut saved_file_tx, file_saved_data) {
+        Ok(_) => print!("\nSuccessfully sent ai output.\n"),
+        Err(err) => print!("\nFailed to send user input: {:?}\n", err),
+    }
+
      monitor.relay_stats_smartly();
+
+
 
     }
     Ok(())
@@ -99,11 +118,11 @@ async fn internal_behavior(context: SteadyContext
 
 
 // Function to write the response to a file
-fn writeToFile(contents: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut outputFile = File::create("codeReview.txt")?;
-    outputFile.write_all(contents.as_bytes())?;
+fn writeToFile(contents: String) -> String {
+    let mut outputFile = File::create("codeReview.txt").unwrap();
+    outputFile.write_all(contents.as_bytes());
     println!("Code review saved to codeReview.txt.");
-    Ok(())
+    return String::from("codeReview.txt");
 }
 
 
