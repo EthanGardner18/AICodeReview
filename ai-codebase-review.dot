@@ -1,0 +1,20 @@
+digraph AICodeReview {
+    __Context [label="This system implements an AI-powered Code Base Review tool. It reads directories and files, parses functions, and reviews code for inefficiencies. Function Scraper, Function Reviewer, and Archive form a loop to iteratively process code functions." shape=box style=dotted];
+
+    ReadDirectory [label="Scan directories for files\nmod::read_directory\nAtLeastEvery(10sec) && OnEvent(start:1)"];
+    ReadFile [label="Read files from directory\nmod::read_file\nOnEvent(directory:1)"];
+    ParseFunction [label="Parse file content into functions\nmod::parse_function\nOnEvent(file:1)"];
+    FunctionScraper [label="Extract specific function details\nmod::function_scraper\nOnEvent(parsed_function:1)"];
+    FunctionReviewer [label="Analyze and review functions\nmod::function_reviewer\nOnEvent(scraped_function:1)"];
+    Archive [label="Archive reviewed function details\nmod::archive\nOnEvent(reviewed_function:1)"];
+    FunctionStorer [label="Store processed functions\nmod::function_storer\nOnEvent(archived_function:1)"];
+
+    ReadDirectory -> ReadFile [label="name::directory <DirectoryPath> >>Take #10"];
+    ReadFile -> ParseFunction [label="name::file <FileContent> >>Take #20"];
+    ParseFunction -> FunctionScraper [label="name::parsed_function <ParsedFunction> >>Take #50"];
+    FunctionScraper -> FunctionReviewer [label="name::scraped_function <ScrapedFunction> >>Take #50"];
+    FunctionReviewer -> Archive [label="name::reviewed_function <ReviewedFunction> >>Take #50"];
+    Archive -> FunctionScraper [label="name::archived_function <ArchivedFunction> >>PeekCopy #50"];
+    Archive -> FunctionStorer [label="name::archived_function <ArchivedFunction> >>Take #50"];
+}
+
