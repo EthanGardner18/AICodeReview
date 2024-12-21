@@ -52,17 +52,18 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,directory_rx: SteadyRx
 
   
           //TODO:  here is an example reading from directory_rx
-          match cmd.try_take(&mut directory_rx) {
-              Some(rec) => {
-                  trace!("got rec: {:?}", rec);
-              }
-              None => {
-                  if clean {
-                     //this could be an error if we expected a value
-                  }
-              }
-          }
+        //   match cmd.try_take(&mut directory_rx) {
+        //       Some(rec) => {
+        //           trace!("got rec: {:?}", rec);
+        //       }
+        //       None => {
+        //           if clean {
+        //              //this could be an error if we expected a value
+        //           }
+        //       }
+        //   }
   
+        // let file_path_struct = monitor.try_take(&mut directory_rx).ok_or("no directory path recieved")
   
         //TODO:  here is an example writing to file_tx
         match cmd.try_send(&mut file_tx, FileContent::default() ) {
