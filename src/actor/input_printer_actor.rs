@@ -8,6 +8,11 @@ use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use serde_json::json;
+use crate::kv::Value;
+use log::kv::Value;
+use serde_json::Value;
+use surf::Client;
 
 // If no internal state is required (recommended), feel free to remove this.
 #[derive(Default)]
@@ -54,82 +59,141 @@ fn print_filtered_files_in_directory(path: &Path, extensions: &[&str]) {
     }
 }
 
-// Function to read and print the contents of a file
-fn read_and_print_file(file_path: &Path) {
-    if file_path.is_file() {
-        match fs::read_to_string(file_path) {
-            Ok(content) => {
-                println!("Contents of file '{}':\n{}", file_path.display(), content);
-            }
-            Err(e) => {
-                println!("Failed to read file '{}': {}", file_path.display(), e);
-            }
-        }
-    } else {
-        println!("The provided path '{}' is not a valid file.", file_path.display());
-    }
-}
-
 async fn internal_behavior<C: SteadyCommander>(
     mut cmd: C,
     state: SteadyState<InputprinterInternalState>,
 ) -> Result<(), Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || InputprinterInternalState::default()).await;
     if let Some(mut _state) = state_guard.as_mut() {
-        // Every read and write channel must be locked for this instance use, this is outside before the loop
+        let mut directories: Vec<PathBuf> = Vec::new(); // Array to store directories
+        let mut results = Vec::new(); // Store the JSON results
 
-        // This is the main loop of the actor, will run until shutdown is requested.
-        // The closure is called upon shutdown to determine if we need to postpone the shutdown
         while cmd.is_running(&mut || true) {
-            // Ask the user for a directory path
             print!("Enter a directory path (or type 'exit' to quit): ");
-            io::stdout().flush()?; // Ensure the prompt is displayed immediately
+            io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let input = input.trim();
 
-            // Exit condition
             if input.eq_ignore_ascii_case("exit") {
                 println!("Exiting program.");
                 break;
             }
 
-            // Define extensions for coding languages
             let coding_extensions = [
                 "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java",
                 "go", "html", "htm", "css", "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm",
                 "r", "md",
             ];
 
-            // Check if the path is valid and list all relevant files
             let path = Path::new(input);
             if path.is_dir() {
+                directories.push(path.to_path_buf()); // Add directory to the array
+
                 println!("Contents of directory '{}' (filtered by coding extensions):", input);
                 print_filtered_files_in_directory(path, &coding_extensions);
 
-                // Prompt user to select a file for reading
-                print!("Enter the path of a file to read its content (or type 'skip' to skip): ");
-                io::stdout().flush()?;
-                let mut file_input = String::new();
-                io::stdin().read_line(&mut file_input)?;
-                let file_input = file_input.trim();
-
-                if file_input.eq_ignore_ascii_case("skip") {
-                    continue;
+                for dir in &directories {
+                    if let Err(e) = process_directory(dir, &mut results).await {
+                        eprintln!("Error processing directory {}: {}", dir.display(), e);
+                    }
                 }
 
-                let file_path = Path::new(file_input);
-                read_and_print_file(file_path);
+                // Write JSON results to file
+                let json_output = serde_json::to_string_pretty(&results)?;
+                fs::write("test.txt", json_output)?;
+
+                println!("Results written to test.txt.");
             } else {
                 println!("The provided path is not a valid directory.");
             }
 
-            // Avoid spinning the loop by using an await for periodic checks
             let _clean = await_for_all!(cmd.wait_periodic(Duration::from_millis(1000)));
         }
     }
     Ok(())
 }
+
+async fn process_directory(
+    dir: &Path,
+    results: &mut Vec<serde_json::Value>,
+) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let file_content = read_and_print_file(&path)?;
+            let parsed_output = call_chatgpt_api(&file_content).await?;
+            results.push(json!(parsed_output));
+        }
+    }
+    Ok(())
+}
+fn read_and_print_file(path: &Path) -> Result<String, Box<dyn Error>> {
+    if let Ok(content) = fs::read_to_string(path) {
+        println!("Reading file: {}", path.display());
+        println!("{}", content);
+        return Ok(content);
+    }
+    Err("Failed to read file".into())
+}
+
+async fn call_chatgpt_api(file_content: &str) -> Result<Value, Box<dyn Error>> {
+    // Your OpenAI API key (read from environment variables for security)
+    let api_key = std::env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
+    
+    // The API endpoint for ChatGPT
+    let api_url = "https://api.openai.com/v1/chat/completions";
+    
+    // The prompt template
+    let prompt_template = format!(
+        "
+        You will receive a file of any coding language, the first line will have the path to the file you are looking at. I would like you to parse the code and only store a header for each function in this format. One \
+        issue you need to check for is that there are comments in the code, so you need to make sure you are starting at the correct line number and ending at the correct line number. Don't forget that different coding \
+        languages use different methods to comment things in and out. Also if you see a new line assume it counts toward the total line number count. Finally, if the function is within a class, give the class \
+        name:function name.\n\nFor a function within a class:\n{{class_name:function_name, path, starting_line_number, last_line_number}}\n\nFor a function without a class:\n{{function_name, path, starting_line_number, last_line_number}}\n\nOnly send the output with nothing else.\n\nHere is the content of the file:\n{file_content}\n
+        "
+    );
+    
+    // HTTP client
+    let client = Client::new();
+    
+    // Construct the JSON payload
+    let request_body = json!({
+        "model": "gpt-4o-mini", // Specify the model you want to use
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a code parser specializing in analyzing functions."
+            },
+            {
+                "role": "user",
+                "content": prompt_template
+            }
+        ],
+        "max_tokens": 1000, // Adjust based on your expected output size
+        "temperature": 0.0  // Lower temperature ensures deterministic results
+    });
+    
+    // Make the POST request
+    let response = client
+        .post(api_url)
+        .bearer_auth(api_key)
+        .json(&request_body)
+        .send()
+        .await?;
+    
+    // Parse the JSON response
+    if response.status().is_success() {
+        let response_body: Value = response.json().await?;
+        Ok(response_body)
+    } else {
+        let error_message = response.text().await?;
+        Err(format!("API request failed: {}", error_message).into())
+    }
+}
+
+
 
 #[cfg(test)]
 pub async fn run(
