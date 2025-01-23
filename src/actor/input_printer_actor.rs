@@ -9,10 +9,15 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use serde_json::json;
-use crate::kv::Value;
-use log::kv::Value;
-use serde_json::Value;
+use crate::kv::Value as KvValue; // Alias for crate::kv::Value
+use log::kv::Value as LogValue;  // Alias for log::kv::Value
+use serde_json::Value as JsonValue; // Alias for serde_json::Value
 use surf::Client;
+use surf::http::headers::HeaderValue;
+use surf::http::headers::AUTHORIZATION;
+use dotenv::dotenv;
+use std::env;
+
 
 // If no internal state is required (recommended), feel free to remove this.
 #[derive(Default)]
@@ -59,6 +64,7 @@ fn print_filtered_files_in_directory(path: &Path, extensions: &[&str]) {
     }
 }
 
+
 async fn internal_behavior<C: SteadyCommander>(
     mut cmd: C,
     state: SteadyState<InputprinterInternalState>,
@@ -99,11 +105,57 @@ async fn internal_behavior<C: SteadyCommander>(
                     }
                 }
 
-                // Write JSON results to file
-                let json_output = serde_json::to_string_pretty(&results)?;
-                fs::write("test.txt", json_output)?;
+                // Process the JSON results to extract and format content
+                let formatted_results: Vec<String> = results
+                    .iter()
+                    .filter_map(|result| {
+                        if let Some(content) = result
+                            .get("choices")
+                            .and_then(|choices| choices.get(0))
+                            .and_then(|choice| choice.get("message"))
+                            .and_then(|message| message.get("content"))
+                            .and_then(|content| content.as_str())
+                        {
+                            // Use intermediate bindings to extend lifetimes
+                            let content_replaced = content.replace("```", "");
+                            let lines = content_replaced.trim();
 
-                println!("Results written to test.txt.");
+                            Some(
+                                lines
+                                    .lines()
+                                    .filter(|line| !line.trim().is_empty()) // Skip empty lines
+                                    .map(|line| {
+                                        // Use intermediate bindings for cleaned lines
+                                        let binding = line.replace("{", "").replace("}", "");
+                                        let cleaned_line = binding.trim();
+                                        let parts: Vec<&str> = cleaned_line.split(',').collect();
+
+                                        if parts.len() == 4 {
+                                            format!(
+                                                r#"{{"{}","{}","{}","{}"}}"#,
+                                                parts[0].trim(),
+                                                parts[1].trim(),
+                                                parts[2].trim(),
+                                                parts[3].trim()
+                                            )
+                                        } else {
+                                            String::new() // Handle malformed lines gracefully
+                                        }
+                                    })
+                                    .filter(|line| !line.is_empty()) // Skip malformed lines
+                                    .collect::<Vec<String>>()
+                                    .join("\n"),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                // Write the formatted results to a file
+                fs::write("test.txt", formatted_results.join("\n"))?;
+
+                println!("Formatted results written to test.txt.");
             } else {
                 println!("The provided path is not a valid directory.");
             }
@@ -123,12 +175,15 @@ async fn process_directory(
         let path = entry.path();
         if path.is_file() {
             let file_content = read_and_print_file(&path)?;
-            let parsed_output = call_chatgpt_api(&file_content).await?;
+            let file_path = path.display().to_string(); // Get the file path as a string
+            let parsed_output = call_chatgpt_api(&file_content, &file_path).await?;
             results.push(json!(parsed_output));
         }
     }
     Ok(())
 }
+
+
 fn read_and_print_file(path: &Path) -> Result<String, Box<dyn Error>> {
     if let Ok(content) = fs::read_to_string(path) {
         println!("Reading file: {}", path.display());
@@ -138,9 +193,11 @@ fn read_and_print_file(path: &Path) -> Result<String, Box<dyn Error>> {
     Err("Failed to read file".into())
 }
 
-async fn call_chatgpt_api(file_content: &str) -> Result<Value, Box<dyn Error>> {
+
+async fn call_chatgpt_api(file_content: &str, file_path: &str) -> Result<JsonValue, Box<dyn Error>> {
     // Your OpenAI API key (read from environment variables for security)
-    let api_key = std::env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
+     dotenv().ok();	
+     let api_key = std::env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
     
     // The API endpoint for ChatGPT
     let api_url = "https://api.openai.com/v1/chat/completions";
@@ -151,7 +208,7 @@ async fn call_chatgpt_api(file_content: &str) -> Result<Value, Box<dyn Error>> {
         You will receive a file of any coding language, the first line will have the path to the file you are looking at. I would like you to parse the code and only store a header for each function in this format. One \
         issue you need to check for is that there are comments in the code, so you need to make sure you are starting at the correct line number and ending at the correct line number. Don't forget that different coding \
         languages use different methods to comment things in and out. Also if you see a new line assume it counts toward the total line number count. Finally, if the function is within a class, give the class \
-        name:function name.\n\nFor a function within a class:\n{{class_name:function_name, path, starting_line_number, last_line_number}}\n\nFor a function without a class:\n{{function_name, path, starting_line_number, last_line_number}}\n\nOnly send the output with nothing else.\n\nHere is the content of the file:\n{file_content}\n
+        name:function name.\n\nFor a function within a class:\n{{class_name:function_name, path, starting_line_number, last_line_number}}\n\nFor a function without a class:\n{{function_name, path, starting_line_number, last_line_number}}\n\nOnly send the output with nothing else.\n\nHere is the content of the file:\n{file_content}\n\nAnd this is the path to the file: {file_path}\n
         "
     );
     
@@ -176,19 +233,17 @@ async fn call_chatgpt_api(file_content: &str) -> Result<Value, Box<dyn Error>> {
     });
     
     // Make the POST request
-    let response = client
-        .post(api_url)
-        .bearer_auth(api_key)
-        .json(&request_body)
-        .send()
-        .await?;
-    
+    let mut response = client
+	.post(api_url)
+        .header(AUTHORIZATION, format!("Bearer {}", api_key))
+        .body(surf::Body::from_json(&request_body)?)
+        .await?;    
     // Parse the JSON response
     if response.status().is_success() {
-        let response_body: Value = response.json().await?;
+	let response_body: JsonValue = response.body_json().await?;
         Ok(response_body)
     } else {
-        let error_message = response.text().await?;
+	let error_message = response.body_string().await?;
         Err(format!("API request failed: {}", error_message).into())
     }
 }
