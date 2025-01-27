@@ -77,7 +77,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                       end_line: reviewed.end_line,
                       review_message: reviewed.review_message,
                   };
-                  trace!("got rec: {:?}", archived);
+                  println!("got rec IN ARCHIVE: {:?}", archived);
 
                     //TODO:  here is an example writing to archived_tx
                     match cmd.try_send(&mut archived_tx, archived ) {

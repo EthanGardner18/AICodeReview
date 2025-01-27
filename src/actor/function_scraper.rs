@@ -81,7 +81,7 @@ async fn internal_behavior<C: SteadyCommander>(
 
 
                 // Initial scrape of functions
-            match extract_function_details("hashmap_function.txt") {
+            match extract_function_details("test-1.txt") {
                 Ok(functions) => {
                     trace!("Found {} functions to process", functions.len());
                     

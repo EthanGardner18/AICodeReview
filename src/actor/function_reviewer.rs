@@ -8,8 +8,13 @@ use std::error::Error;
 use crate::actor::function_scraper::CodeFunction;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use reqwest::Client;
+
+
+use surf::Client;
 use serde::Deserialize;
+use serde_json::json;
+
+
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ReviewedFunction {
@@ -47,31 +52,46 @@ async fn get_function_content(filepath: &str, start_line: usize, end_line: usize
     Ok(content)
 }
 
-async fn send_request_with_rate_limit(api_key: &str, prompt: &str) -> Result<ReviewResponse, Box<dyn Error>> {
-    let client = Client::new();
-    let response = client.post("https://api.openai.com/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .json(&serde_json::json!({
-            "model": "gpt-4",
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
-            "temperature": 0.7
-        }))
-        .send()
-        .await?
-        .json::<ReviewResponse>()
-        .await?;
+// Function to call the OpenAI API asynchronously and get a response
+pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
 
-    Ok(response)
+    // Create an HTTP client using the surf crate
+    let client = Client::new();
+
+    // Send the request to the OpenAI API
+    let mut response = client
+        .post("https://api.openai.com/v1/chat/completions")  // API endpoint for OpenAI
+        .header("Authorization", format!("Bearer {}", api_key)) // Add authorization header with the API key
+        .header("Content-Type", "application/json") // Set the request content type to JSON
+        .body(surf::Body::from_json(&json!({ // Create the JSON request body
+            "model": "gpt-4", // Specify the AI model
+            "messages": [{"role": "user", "content": prompt}], // Include the user's prompt
+            "max_tokens": 100 // Limit the number of response tokens
+        }))?)
+        .await?; // Await the response from the API
+
+    // Parse the response as JSON
+    let response_json: serde_json::Value = response.body_json().await?;
+
+    // Line below is used to see raw output from api for troubleshooting
+    // println!("API Response: {:?}", response_json);
+
+    // Extract the AI's response content from the JSON response
+    let response_content = match response_json["choices"][0]["message"]["content"].as_str() {
+        Some(content) => content.to_string(),
+        None => "No response received.".to_string(),
+    };
+
+    Ok(response_content)
 }
+
 
 pub async fn review_function(
     api_key: &str, 
     func: &CodeFunction, 
     remaining_functions: &[CodeFunction]
-) -> Result<ReviewResponse, Box<dyn Error>> {
+) -> Result<ReviewedFunction, Box<dyn Error>> {
+    //! Change in the future this Result to ReviewResponse return
     let function_content = get_function_content(&func.filepath, func.start_line, func.end_line).await?;
     
     let non_reviewed_list = remaining_functions
@@ -93,9 +113,19 @@ pub async fn review_function(
         non_reviewed_list
     );
 
-    let response = send_request_with_rate_limit(api_key, &prompt).await?;
-    println!("{:?}", response);
-    Ok(response)
+    let response = call_openai_api(api_key, &prompt).await?;
+    let return_value = ReviewedFunction {
+
+        name: func.name.clone(),
+        namespace: String::from("===TEST==="),
+        filepath: func.filepath.clone(),
+        start_line: func.start_line,
+        end_line: func.end_line,
+        review_message: response,
+
+    };
+    println!("RESPONSE IN review_function() {:?}", return_value);
+    Ok(return_value)
 }
 
 pub async fn run(context: SteadyContext
@@ -136,17 +166,22 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
           match cmd.try_take(&mut functions_rx) {
               Some(rec) => {
 
-                let reviewed = ReviewedFunction {
-                    name: rec.name,
-                    namespace: String::from("TEST NAMESPACE"),
-                    filepath: rec.filepath,
-                    start_line: rec.start_line,
-                    end_line: rec.end_line,
-                    review_message: String::from("SOMETHING COOL"),
-                };
+                // let reviewed = ReviewedFunction {
+                //     name: rec.name,
+                //     namespace: String::from("TEST NAMESPACE"),
+                //     filepath: rec.filepath,
+                //     start_line: rec.start_line,
+                //     end_line: rec.end_line,
+                //     review_message: String::from("SOMETHING COOL"),
+                // };
 
+                    //? remaing_funciotn is an empyt array
+                    let remaining_functions: &[CodeFunction] = &[];
+                    let api_key = "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";
 
-                  println!("got rec: {:?}", &reviewed);
+                    let reviewed = review_function(api_key, &rec, remaining_functions).await?;
+
+                  println!("got rec: {:?}", &rec);
 
                     //TODO:  here is an example writing to reviewed_tx
                     match cmd.try_send(&mut reviewed_tx, reviewed) {
