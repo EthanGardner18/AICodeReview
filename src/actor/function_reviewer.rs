@@ -241,7 +241,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
 
                     //? remaing_funciotn is an empyt array
                     let remaining_functions: &[CodeFunction] = &[];
-                    let api_key = "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";
+                    let api_key = "";
 
                     let reviewed = send_prompt_to_chatgpt(, &rec, remaining_functions).await?;
 
