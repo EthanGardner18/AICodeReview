@@ -12,7 +12,12 @@ use std::io::{BufRead, BufReader};
 
 use surf::Client;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::Value as JsonValue;
+use dotenv::dotenv;
+use std::env;
+
+use surf::http::headers::HeaderValue;
+use surf::http::headers::AUTHORIZATION;
 
 
 
@@ -53,80 +58,139 @@ async fn get_function_content(filepath: &str, start_line: usize, end_line: usize
 }
 
 // Function to call the OpenAI API asynchronously and get a response
-pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
+// pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
 
-    // Create an HTTP client using the surf crate
+//     // Create an HTTP client using the surf crate
+//     let client = Client::new();
+
+//     // Send the request to the OpenAI API
+//     let mut response = client
+//         .post("https://api.openai.com/v1/chat/completions")  // API endpoint for OpenAI
+//         .header("Authorization", format!("Bearer {}", api_key)) // Add authorization header with the API key
+//         .header("Content-Type", "application/json") // Set the request content type to JSON
+//         .body(surf::Body::from_json(&json!({ // Create the JSON request body
+//             "model": "gpt-4", // Specify the AI model
+//             "messages": [{"role": "user", "content": prompt}], // Include the user's prompt
+//             "max_tokens": 100 // Limit the number of response tokens
+//         }))?)
+//         .await?; // Await the response from the API
+
+//     // Parse the response as JSON
+//     let response_json: serde_json::Value = response.body_json().await?;
+
+//     // Line below is used to see raw output from api for troubleshooting
+//     // println!("API Response: {:?}", response_json);
+
+//     // Extract the AI's response content from the JSON response
+//     let response_content = match response_json["choices"][0]["message"]["content"].as_str() {
+//         Some(content) => content.to_string(),
+//         None => "No response received.".to_string(),
+//     };
+
+//     Ok(response_content)
+// }
+
+
+
+async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> {
+    dotenv().ok();
+    let api_key = env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
+
+    let api_url = "https://api.openai.com/v1/chat/completions";
     let client = Client::new();
 
-    // Send the request to the OpenAI API
+    let request_body = json!({
+        "model": "gpt-4o-mini", // Specify the model
+        "messages": [
+            {
+                 "role": "system",
+                "content": "You are an AI assistant specializing in code analysis."
+            },
+            {
+                 "role": "user",
+                "content": prompt
+            }
+        ],
+    "max_tokens": 1000,
+        "temperature": 0.0
+    });
+
     let mut response = client
-        .post("https://api.openai.com/v1/chat/completions")  // API endpoint for OpenAI
-        .header("Authorization", format!("Bearer {}", api_key)) // Add authorization header with the API key
-        .header("Content-Type", "application/json") // Set the request content type to JSON
-        .body(surf::Body::from_json(&json!({ // Create the JSON request body
-            "model": "gpt-4", // Specify the AI model
-            "messages": [{"role": "user", "content": prompt}], // Include the user's prompt
-            "max_tokens": 100 // Limit the number of response tokens
-        }))?)
-        .await?; // Await the response from the API
+        .post(api_url)
+        .header(AUTHORIZATION, format!("Bearer {}", api_key))
+        .body(surf::Body::from_json(&request_body)?)
+        .await?;
 
-    // Parse the response as JSON
-    let response_json: serde_json::Value = response.body_json().await?;
-
-    // Line below is used to see raw output from api for troubleshooting
-    // println!("API Response: {:?}", response_json);
-
-    // Extract the AI's response content from the JSON response
-    let response_content = match response_json["choices"][0]["message"]["content"].as_str() {
-        Some(content) => content.to_string(),
-        None => "No response received.".to_string(),
-    };
-
-    Ok(response_content)
+    if response.status().is_success() {
+        let response_body: JsonValue = response.body_json().await?;
+        if let Some(choice) = response_body.get("choices").and_then(|choices| choices.get(0)) {
+            if let Some(content) = choice.get("message").and_then(|msg| msg.get("content")) {
+                return Ok(content.as_str().unwrap_or("").to_string());
+            }
+        }
+        Err("Failed to parse ChatGPT response".into())
+    } else {
+        let error_message = response.body_string().await?;
+        Err(format!("API request failed: {}", error_message).into())
+    }
 }
 
 
-pub async fn review_function(
-    api_key: &str, 
-    func: &CodeFunction, 
-    remaining_functions: &[CodeFunction]
-) -> Result<ReviewedFunction, Box<dyn Error>> {
-    //! Change in the future this Result to ReviewResponse return
-    let function_content = get_function_content(&func.filepath, func.start_line, func.end_line).await?;
+// pub async fn review_function(
+//     api_key: &str, 
+//     func: &CodeFunction, 
+//     remaining_functions: &[CodeFunction]
+// ) -> Result<ReviewedFunction, Box<dyn Error>> {
+//     //! Change in the future this Result to ReviewResponse return
+//     let function_content = get_function_content(&func.filepath, func.start_line, func.end_line).await?;
     
-    let non_reviewed_list = remaining_functions
-        .iter()
-        .map(|f| format!("{}, {}", f.name, f.filepath))
-        .collect::<Vec<_>>()
-        .join("\n");
+//     let non_reviewed_list = remaining_functions
+//         .iter()
+//         .map(|f| format!("{}, {}", f.name, f.filepath))
+//         .collect::<Vec<_>>()
+//         .join("\n");
 
-    let prompt = format!(
-        "I am conducting an AI Code Review of my entire project base. Here is the content of the function you thought it was important. \
-        Along with its path.\n\n{}\n{}\n\n\
-        I want you to provide me a review of this piece of code in 200 words or less. The next step for you would be to decide the next function you want to look at. \
-        Here is the list of not reviewed functions:\n\
-        {}\n\n\
-        I want the format of your message to be like this. No other text and explanation.\n\
-        {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
-        function_content,
-        func.filepath,
-        non_reviewed_list
-    );
+//     let prompt = format!(
+//         "I am conducting an AI Code Review of my entire project base. Here is the content of the function you thought it was important. \
+//         Along with its path.\n\n{}\n{}\n\n\
+//         I want you to provide me a review of this piece of code in 200 words or less. The next step for you would be to decide the next function you want to look at. \
+//         Here is the list of not reviewed functions:\n\
+//         {}\n\n\
+//         I want the format of your message to be like this. No other text and explanation.\n\
+//         {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
+//         function_content,
+//         func.filepath,
+//         non_reviewed_list
+//     );
 
-    let response = call_openai_api(api_key, &prompt).await?;
-    let return_value = ReviewedFunction {
+//     let response = call_openai_api(api_key, &prompt).await?;
+//     let return_value = ReviewedFunction {
 
-        name: func.name.clone(),
-        namespace: String::from("===TEST==="),
-        filepath: func.filepath.clone(),
-        start_line: func.start_line,
-        end_line: func.end_line,
-        review_message: response,
+//         name: func.name.clone(),
+//         namespace: String::from("===TEST==="),
+//         filepath: func.filepath.clone(),
+//         start_line: func.start_line,
+//         end_line: func.end_line,
+//         review_message: response,
 
-    };
-    println!("RESPONSE IN review_function() {:?}", return_value);
-    Ok(return_value)
-}
+//     };
+//     println!("RESPONSE IN review_function() {:?}", return_value);
+//     Ok(return_value)
+// }
+// let response = call_openai_api(api_key, &prompt).await?;
+// let return_value = ReviewedFunction {
+
+//     name: func.name.clone(),
+//     namespace: String::from("===TEST==="),
+//     filepath: func.filepath.clone(),
+//     start_line: func.start_line,
+//     end_line: func.end_line,
+//     review_message: response,
+
+// };
+// println!("RESPONSE IN review_function() {:?}", return_value);
+// Ok(return_value)
+// }
 
 pub async fn run(context: SteadyContext
         ,functions_rx: SteadyRx<CodeFunction>
@@ -179,7 +243,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
                     let remaining_functions: &[CodeFunction] = &[];
                     let api_key = "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";
 
-                    let reviewed = review_function(api_key, &rec, remaining_functions).await?;
+                    let reviewed = send_prompt_to_chatgpt(, &rec, remaining_functions).await?;
 
                   println!("got rec: {:?}", &rec);
 
