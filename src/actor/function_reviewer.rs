@@ -18,8 +18,7 @@ use std::env;
 
 use surf::http::headers::HeaderValue;
 use surf::http::headers::AUTHORIZATION;
-
-
+use serde_json::json;
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ReviewedFunction {
@@ -45,18 +44,19 @@ pub struct ReviewResponse {
     pub next_function_path: String,
 }
 
-async fn get_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
-    let file = File::open(filepath)?;
-    let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines()
-        .collect::<Result<Vec<_>, _>>()?;
+// async fn get_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
+//     let file = File::open(filepath)?;
+//     let reader = BufReader::new(file);
+//     let lines: Vec<String> = reader.lines()
+//         .collect::<Result<Vec<_>, _>>()?;
     
-    let content = lines[start_line - 1..end_line]
-        .join("\n");
+//     let content = lines[start_line - 1..end_line]
+//         .join("\n");
     
-    Ok(content)
-}
+//     Ok(content)
+// }
 
+//TODO RM LATER
 // Function to call the OpenAI API asynchronously and get a response
 // pub async fn call_openai_api(prompt: &str, api_key: &str) -> Result<String, Box<dyn Error>> {
 
@@ -100,18 +100,18 @@ async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> 
     let client = Client::new();
 
     let request_body = json!({
-        "model": "gpt-4o-mini", // Specify the model
+        "model": "gpt-4o-mini",
         "messages": [
             {
                  "role": "system",
-                "content": "You are an AI assistant specializing in code analysis."
+                "content": "Give me an explanation in less than 10 words of this code."
             },
             {
                  "role": "user",
                 "content": prompt
             }
         ],
-    "max_tokens": 1000,
+        "max_tokens": 10,
         "temperature": 0.0
     });
 
@@ -136,61 +136,46 @@ async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> 
 }
 
 
-// pub async fn review_function(
-//     api_key: &str, 
-//     func: &CodeFunction, 
-//     remaining_functions: &[CodeFunction]
-// ) -> Result<ReviewedFunction, Box<dyn Error>> {
-//     //! Change in the future this Result to ReviewResponse return
-//     let function_content = get_function_content(&func.filepath, func.start_line, func.end_line).await?;
+pub async fn review_function(
+    func: &CodeFunction, 
+    remaining_functions: &[CodeFunction]
+) -> Result<ReviewedFunction, Box<dyn Error>> {
+    // Get the function content from the CodeFunction struct
+    let function_content = &func.content;  // Now using the content directly from CodeFunction
     
-//     let non_reviewed_list = remaining_functions
-//         .iter()
-//         .map(|f| format!("{}, {}", f.name, f.filepath))
-//         .collect::<Vec<_>>()
-//         .join("\n");
+    let non_reviewed_list = remaining_functions
+        .iter()
+        .map(|f| format!("{}, {}", f.name, f.filepath))
+        .collect::<Vec<_>>()
+        .join("\n");
 
-//     let prompt = format!(
-//         "I am conducting an AI Code Review of my entire project base. Here is the content of the function you thought it was important. \
-//         Along with its path.\n\n{}\n{}\n\n\
-//         I want you to provide me a review of this piece of code in 200 words or less. The next step for you would be to decide the next function you want to look at. \
-//         Here is the list of not reviewed functions:\n\
-//         {}\n\n\
-//         I want the format of your message to be like this. No other text and explanation.\n\
-//         {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
-//         function_content,
-//         func.filepath,
-//         non_reviewed_list
-//     );
+    let prompt = format!(
+        "I am conducting an AI Code Review of my entire project base. Here is the content of the function you thought it was important. \
+        Along with its path.\n\n{}\n{}\n\n\
+        I want you to provide me a review of this piece of code in 200 words or less. The next step for you would be to decide the next function you want to look at. \
+        Here is the list of not reviewed functions:\n\
+        {}\n\n\
+        I want the format of your message to be like this. No other text and explanation.\n\
+        {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
+        function_content,
+        func.filepath,
+        non_reviewed_list
+    );
 
-//     let response = call_openai_api(api_key, &prompt).await?;
-//     let return_value = ReviewedFunction {
-
-//         name: func.name.clone(),
-//         namespace: String::from("===TEST==="),
-//         filepath: func.filepath.clone(),
-//         start_line: func.start_line,
-//         end_line: func.end_line,
-//         review_message: response,
-
-//     };
-//     println!("RESPONSE IN review_function() {:?}", return_value);
-//     Ok(return_value)
-// }
-// let response = call_openai_api(api_key, &prompt).await?;
-// let return_value = ReviewedFunction {
-
-//     name: func.name.clone(),
-//     namespace: String::from("===TEST==="),
-//     filepath: func.filepath.clone(),
-//     start_line: func.start_line,
-//     end_line: func.end_line,
-//     review_message: response,
-
-// };
-// println!("RESPONSE IN review_function() {:?}", return_value);
-// Ok(return_value)
-// }
+    let response = send_prompt_to_chatgpt(&prompt).await?;
+    
+    let return_value = ReviewedFunction {
+        name: func.name.clone(),
+        namespace: func.namespace.clone(),  // Now using the namespace from CodeFunction
+        filepath: func.filepath.clone(),
+        start_line: func.start_line,
+        end_line: func.end_line,
+        review_message: response,
+    };
+    
+    trace!("Review completed for function: {}", func.name);
+    Ok(return_value)
+}
 
 pub async fn run(context: SteadyContext
         ,functions_rx: SteadyRx<CodeFunction>
@@ -243,9 +228,20 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
                     let remaining_functions: &[CodeFunction] = &[];
                     let api_key = "";
 
-                    let reviewed = send_prompt_to_chatgpt(, &rec, remaining_functions).await?;
+                    let reviewed = review_function(&rec, remaining_functions).await?;
 
-                  println!("got rec: {:?}", &rec);
+                    // let reviewed = ReviewedFunction {
+                    //     name: String::from("test"),
+                    //     namespace: String::from("test"),
+                    //     filepath: String::from("test"),
+                    //     start_line: 100,
+                    //     end_line: 101,
+                    //     review_message: result.
+                    // };
+
+
+
+                //  ? println!("got rec: {:?}", &rec);
 
                     //TODO:  here is an example writing to reviewed_tx
                     match cmd.try_send(&mut reviewed_tx, reviewed) {

@@ -7,13 +7,17 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::archive::LoopSignal;
 use regex::Regex;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct CodeFunction {
     pub name: String,
+    pub namespace: String,
     pub filepath: String,
     pub start_line: usize,
     pub end_line: usize,
+    pub content: String,
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -22,29 +26,50 @@ pub(crate) struct FunctionscraperInternalState {
 }
 
 fn extract_function_details(file_path: &str) -> Result<Vec<CodeFunction>, Box<dyn Error>> {
-    use std::fs::File;
-    use std::io::{BufRead, BufReader};
-
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
-    let re = Regex::new(r#"\{"([^:]+:[^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
+    let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
     
     let mut function_details = Vec::new();
     
     for line in reader.lines() {
         let line = line?;
         if let Some(captures) = re.captures(&line) {
+            // Get the function content from the specified file and lines
+            let name = captures[1].to_string();
+            let namespace = captures[2].to_string();
+            let filepath = captures[3].to_string();
+            let start_line: usize = captures[4].parse()?;
+            let end_line: usize = captures[5].parse()?;
+            
+            // Read the actual function content from the specified file
+            let content = read_function_content(&filepath, start_line, end_line)?;
+            
             let function = CodeFunction {
-                name: captures[1].to_string(),
-                filepath: captures[2].to_string(),
-                start_line: captures[3].parse()?,
-                end_line: captures[4].parse()?,
+                name,
+                namespace,
+                filepath,
+                start_line,
+                end_line,
+                content,
             };
             function_details.push(function);
         }
     }
     
     Ok(function_details)
+}
+
+fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
+    let file = File::open(filepath)?;
+    let reader = BufReader::new(file);
+    let lines: Vec<String> = reader.lines()
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let content = lines[start_line - 1..end_line]
+        .join("\n");
+    
+    Ok(content)
 }
 
 pub async fn run(context: SteadyContext
@@ -68,47 +93,39 @@ async fn internal_behavior<C: SteadyCommander>(
 ) -> Result<(),Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || FunctionscraperInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
+        let mut loop_feedback_rx = loop_feedback_rx.lock().await;
+        let mut functions_tx = functions_tx.lock().await;
 
-   //every read and write channel must be locked for this instance use, this is outside before the loop
-   let mut loop_feedback_rx = loop_feedback_rx.lock().await;
-   let mut functions_tx = functions_tx.lock().await;
-
-       
+        // Initial scrape of functions
+        match extract_function_details("test-1.txt") {
+            Ok(functions) => {
+                trace!("Found {} functions to process", functions.len());
+                
+                // Send each function through the channel
+                for function in functions {
+                    match cmd.try_send(&mut functions_tx, function.clone()) {
+                        Ok(()) => {
+                            trace!("Successfully sent function: {}", function.name);
+                        },
+                        Err(e) => {
+                            error!("Failed to send function: {:?}", e);
+                        },
+                    }
+                }
+            },
+            Err(e) => {
+                error!("Failed to extract functions: {:?}", e);
+            }
+        }
 
         // Main loop - wait for any additional signals
         while cmd.is_running(&mut ||loop_feedback_rx.is_closed_and_empty() && functions_tx.mark_closed()) {
             let clean = await_for_all!(cmd.wait_periodic(Duration::from_secs(10)));
 
-
-                // Initial scrape of functions
-            match extract_function_details("test-1.txt") {
-                Ok(functions) => {
-                    trace!("Found {} functions to process", functions.len());
-                    
-                    // Send each function through the channel
-                    for function in functions {
-                        match cmd.try_send(&mut functions_tx, function.clone()) {
-                            Ok(()) => {
-                                println!("Successfully sent function: {}", function.name);
-                            },
-                            Err(e) => {
-                                error!("Failed to send function: {:?}", e);
-                            },
-                        }
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to extract functions: {:?}", e);
-                }
-            }
-
             match cmd.try_take(&mut loop_feedback_rx) {
                 Some(signal) => {
-                    if !signal.state {
-                        break
-                    }
                     trace!("Received loop signal: {:?}", signal);
-                    // Could implement re-scanning of the file here if needed
+                    cmd.request_graph_stop();
                 },
                 None => {
                     if clean {
@@ -127,20 +144,25 @@ pub(crate) mod tests {
 
     #[async_std::test]
     pub(crate) async fn test_function_scraping() {
-        // Create a temporary test file
-        let test_content = r#"{"test_func:namespace", "test/path.rs", 1, 10}"#;
-        std::fs::write("test_functions.txt", test_content).unwrap();
+        // Create a test source file with some function content
+        let source_content = "fn test_function() {\n    println!(\"Hello\");\n}\n";
+        std::fs::write("test_source.rs", source_content).unwrap();
+
+        // Create the test-1.txt file with function metadata
+        let test_content = r#"{"test_function:test_ns", "test_source.rs", 1, 3}"#;
+        std::fs::write("test-1.txt", test_content).unwrap();
 
         // Test the extraction
-        let results = extract_function_details("test_functions.txt").unwrap();
+        let results = extract_function_details("test-1.txt").unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].name, "test_func:namespace");
-        assert_eq!(results[0].filepath, "test/path.rs");
-        assert_eq!(results[0].start_line, 1);
-        assert_eq!(results[0].end_line, 10);
+        assert_eq!(results[0].name, "test_function");
+        assert_eq!(results[0].namespace, "test_ns");
+        assert_eq!(results[0].filepath, "test_source.rs");
+        assert_eq!(results[0].content, source_content.trim());
 
         // Clean up
-        std::fs::remove_file("test_functions.txt").unwrap();
+        std::fs::remove_file("test-1.txt").unwrap();
+        std::fs::remove_file("test_source.rs").unwrap();
     }
 
     #[async_std::test]

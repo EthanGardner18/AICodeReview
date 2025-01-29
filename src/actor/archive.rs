@@ -7,6 +7,9 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::function_reviewer::ReviewedFunction;
 
+use std::fs::OpenOptions;
+use std::io::Write;
+
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ArchivedFunction {
     pub name: String,
@@ -25,6 +28,21 @@ pub(crate) struct LoopSignal {
 //if no internal state is required (recommended) feel free to remove this.
 #[derive(Default)]
 pub(crate) struct ArchiveInternalState {
+}
+
+pub async fn write_review_to_file(review_content: &str) -> Result<(), Box<dyn Error>> {
+    let file_path = "reviewed_information.md";
+    
+    // Open file in append mode, create if doesn't exist
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+
+    // Write the content and add a newline
+    writeln!(file, "{}", review_content)?;
+    
+    Ok(())
 }
 
 
@@ -69,6 +87,8 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
           //TODO:  here is an example reading from reviewed_rx
           match cmd.try_take(&mut reviewed_rx) {
               Some(reviewed) => {
+                write_review_to_file(&reviewed.review_message.as_str()).await?;
+
                   let archived = ArchivedFunction {
                       name: reviewed.name,
                       namespace: reviewed.namespace,
@@ -77,7 +97,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                       end_line: reviewed.end_line,
                       review_message: reviewed.review_message,
                   };
-                  println!("got rec IN ARCHIVE: {:?}", archived);
+                //   println!("got rec IN ARCHIVE: {:?}", archived);
 
                     //TODO:  here is an example writing to archived_tx
                     match cmd.try_send(&mut archived_tx, archived ) {
