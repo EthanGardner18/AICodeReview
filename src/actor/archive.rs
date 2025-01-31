@@ -6,9 +6,11 @@ use steady_state::*;
 use crate::Args;
 use std::error::Error;
 use crate::actor::function_reviewer::ReviewedFunction;
+use std::collections::HashMap;
 
 use std::fs::OpenOptions;
 use std::io::Write;
+
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ArchivedFunction {
@@ -20,9 +22,11 @@ pub(crate) struct ArchivedFunction {
     pub review_message: String,
 }
 
-#[derive(Default,Clone,Debug,Eq,PartialEq,Copy)]
-pub(crate) struct LoopSignal {
-   pub state: bool //TODO:  remove dummy and put your channel message fields here
+#[derive(Debug)]
+pub struct LoopSignal {
+    pub key: String,
+    pub filepath: String,
+    pub remaining_functions: HashMap<String, String>,
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -45,6 +49,89 @@ pub async fn write_review_to_file(review_content: &str) -> Result<(), Box<dyn Er
     Ok(())
 }
 
+fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Option<LoopSignal> {
+    println!("Starting process_review_and_update_map");
+    println!("Review message: {}", reviewed_function.review_message);
+    
+    // Extract the parts using a more robust approach
+    let review_msg = reviewed_function.review_message.trim_matches('{').trim_matches('}');
+    
+    // Find the indices of the last three commas
+    let mut comma_indices: Vec<_> = review_msg.match_indices(',').map(|(i, _)| i).collect();
+    if comma_indices.len() < 3 {
+        println!("Not enough commas found in review message");
+        return None;
+    }
+    
+    // Get the last three comma positions
+    let last_three_commas = &comma_indices[comma_indices.len()-3..];
+    
+    // Extract the relevant parts
+    let continue_flag = review_msg[last_three_commas[0]+1..last_three_commas[1]].trim();
+    let next_function = review_msg[last_three_commas[1]+1..last_three_commas[2]].trim();
+    
+    println!("Continue flag: {}", continue_flag);
+    println!("Next function: {}", next_function);
+    
+    let should_continue = continue_flag == "1";
+    if should_continue {
+        println!("Available functions in map: {:?}", reviewed_function.function_map.keys());
+        
+        // Find the full key (Class:function) that ends with the next_function_name
+        for (key, filepath) in reviewed_function.function_map.iter() {
+            println!("Checking key: {}", key);
+            // Split the key to get the class and function parts
+            let key_parts: Vec<&str> = key.split(':').collect();
+            if key_parts.len() == 2 && key_parts[1] == next_function {
+                println!("Found matching key: {}", key);
+                // Clone the HashMap and remove the found function
+                let mut updated_map = reviewed_function.function_map.clone();
+                updated_map.remove(key);
+                
+                trace!("Found next function: {} at {}", key, filepath);
+                println!("Found next function: {} at {}", key, filepath);
+                
+                // Create the LoopSignal with the necessary information
+                let signal = LoopSignal {
+                    key: key.to_string(),
+                    filepath: filepath.clone(),
+                    remaining_functions: updated_map,
+                };
+                println!("Created LoopSignal: {:#?}", signal);
+                return Some(signal);
+            }
+        }
+        
+        error!("Next function '{}' not found in remaining functions map", next_function);
+        println!("Next function '{}' not found in remaining functions map", next_function);
+    } else {
+        trace!("Review process complete (flag = 0)");
+        println!("Review process complete (flag = 0)");
+    }
+    
+    println!("Returning None from process_review_and_update_map");
+    None
+}
+
+// pub async fn process_reviewed_function(mut reviewed_function: ReviewedFunction) -> Result<(), Box<dyn Error>> {
+//     // Process the current review (store it, log it, etc.)
+    
+//     // Get the next function to review
+//     match process_review_and_update_map(&mut reviewed_function) {
+//         Some(LoopSignal { key, filepath, remaining_functions }) => {
+//             trace!("Next function to review: {} at {}", key, filepath);
+//             // Your code to send the LoopSignal to the next actor...
+//         }
+//         None => {
+//             error!("Failed to process review message");
+//         }
+//     }
+    
+//     Ok(())
+// }
+
+
+
 
 pub async fn run(context: SteadyContext
         ,reviewed_rx: SteadyRx<ReviewedFunction>
@@ -60,80 +147,74 @@ pub async fn run(context: SteadyContext
   internal_behavior(cmd,reviewed_rx, loop_feedback_tx, archived_tx, state).await
 }
 
-async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<ReviewedFunction>,loop_feedback_tx: SteadyTx<LoopSignal>,archived_tx: SteadyTx<ArchivedFunction>, state: SteadyState<ArchiveInternalState>
- ) -> Result<(),Box<dyn Error>> {
-
+async fn internal_behavior<C: SteadyCommander>(
+    mut cmd: C,
+    reviewed_rx: SteadyRx<ReviewedFunction>,
+    loop_feedback_tx: SteadyTx<LoopSignal>,
+    archived_tx: SteadyTx<ArchivedFunction>, 
+    state: SteadyState<ArchiveInternalState>
+) -> Result<(), Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || ArchiveInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
+        let mut reviewed_rx = reviewed_rx.lock().await;
+        let mut loop_feedback_tx = loop_feedback_tx.lock().await;
+        let mut archived_tx = archived_tx.lock().await;
 
-   //every read and write channel must be locked for this instance use, this is outside before the loop
-   let mut reviewed_rx = reviewed_rx.lock().await;
-   let mut loop_feedback_tx = loop_feedback_tx.lock().await;
-   let mut archived_tx = archived_tx.lock().await;
+        while cmd.is_running(&mut ||reviewed_rx.is_closed_and_empty() && loop_feedback_tx.mark_closed() && archived_tx.mark_closed()) {
+            let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut reviewed_rx,1));
 
-   let mut loop_struct = LoopSignal {
-        state: true
-   };
-
-   //this is the main loop of the actor, will run until shutdown is requested.
-   //the closure is called upon shutdown to determine if we need to postpone the shutdown
-   while cmd.is_running(&mut ||reviewed_rx.is_closed_and_empty() && loop_feedback_tx.mark_closed() && archived_tx.mark_closed()) {
-
-     // our loop avoids spinning by using await here on multiple criteria. clean is false if await
-     // returned early due to a shutdown request or closed channel.
-         let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut reviewed_rx,1)    );
-
-  
-          //TODO:  here is an example reading from reviewed_rx
-          match cmd.try_take(&mut reviewed_rx) {
-              Some(reviewed) => {
-                write_review_to_file(&reviewed.review_message.as_str()).await?;
-
-                  let archived = ArchivedFunction {
-                      name: reviewed.name,
-                      namespace: reviewed.namespace,
-                      filepath: reviewed.filepath,
-                      start_line: reviewed.start_line,
-                      end_line: reviewed.end_line,
-                      review_message: reviewed.review_message,
-                  };
-                //   println!("got rec IN ARCHIVE: {:?}", archived);
-
-                    //TODO:  here is an example writing to archived_tx
-                    match cmd.try_send(&mut archived_tx, archived ) {
-                        Ok(()) => {
-                        },
-                        Err(msg) => { //in the above await we should have confirmed space is available
-                            trace!("error sending: {:?}", msg)
-                        },
+            match cmd.try_take(&mut reviewed_rx) {
+                Some(mut reviewed) => {
+                    println!("RECIEVED FROM REVIEWER");
+                    // Process the review to find the next function
+                    if let Some(loop_signal) = process_review_and_update_map(&mut reviewed) {
+                        // Send the next function information immediately
+                        println!("archive - scraper \n{:#?}", &loop_signal);
+                        match cmd.try_send(&mut loop_feedback_tx, loop_signal) {
+                            Ok(()) => {
+                                trace!("Successfully sent next function signal");
+                                println!("SENT loop_signal TO SCRAPER")
+                            },
+                            Err(e) => {
+                                error!("Failed to send loop signal: {:?}", e);
+                            }
+                        }
+                    } else {
+                        trace!("No next function to process");
+                        cmd.request_graph_stop();
                     }
-              }
-              None => {
-                  if clean {
-                     //this could be an error if we expected a value
-                     loop_struct.state = false
 
-                  }
-              }
-          }
+                    // Write the current review to file
+                    if let Err(e) = write_review_to_file(&reviewed.review_message).await {
+                        error!("Failed to write review to file: {:?}", e);
+                    }
 
-          
-        ////   let reviewed_function  = cmd.try_take(&mut reviewed_rx).ok_or("ERROR @ archive.rs")?;
-  
-        //TODO:  here is an example writing to loop_feedback_tx
-        match cmd.try_send(&mut loop_feedback_tx, loop_struct ) {
-            Ok(()) => {
-            },
-            Err(msg) => { //in the above await we should have confirmed space is available
-                trace!("error sending: {:?}", msg)
-            },
+                    // Archive the current function
+                    let archived = ArchivedFunction {
+                        name: reviewed.name,
+                        namespace: reviewed.namespace,
+                        filepath: reviewed.filepath,
+                        start_line: reviewed.start_line,
+                        end_line: reviewed.end_line,
+                        review_message: reviewed.review_message,
+                    };
+
+                    match cmd.try_send(&mut archived_tx, archived) {
+                        Ok(()) => {
+                            trace!("Successfully archived function");
+                        },
+                        Err(e) => {
+                            error!("Failed to send archived function: {:?}", e);
+                        }
+                    }
+                }
+                None => {
+                    if clean {
+                        trace!("No more reviews to process");
+                    }
+                }
+            }
         }
-  
-  
-
-  
-
-      }
     }
     Ok(())
 }

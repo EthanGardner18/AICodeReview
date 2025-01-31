@@ -1,3 +1,4 @@
-{"Agent:__init__", "/Misc/projects/test-loop/test-graph/game.py", 39, 41}
 {"Agent:getAction", "/Misc/projects/test-loop/test-graph/game.py", 42, 47}
-
+{"Configuration:__init__", "/Misc/projects/test-loop/test-graph/game.py", 79, 81}
+{"Configuration:getPosition", "/Misc/projects/test-loop/test-graph/game.py", 83, 84}
+{"Configuration:getDirection", "/Misc/projects/test-loop/test-graph/game.py", 86, 87}

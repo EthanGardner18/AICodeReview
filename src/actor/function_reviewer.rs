@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use log::*;
+use std::collections::HashMap;
 #[allow(unused_imports)]
 use std::time::Duration;
 use steady_state::*;
@@ -28,6 +29,7 @@ pub(crate) struct ReviewedFunction {
     pub start_line: usize,
     pub end_line: usize,
     pub review_message: String,
+    pub function_map: HashMap<String, String>
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -104,14 +106,14 @@ async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> 
         "messages": [
             {
                  "role": "system",
-                "content": "Give me an explanation in less than 10 words of this code."
+                "content": "Give me an explanation"
             },
             {
                  "role": "user",
                 "content": prompt
             }
         ],
-        "max_tokens": 10,
+        "max_tokens": 500,
         "temperature": 0.0
     });
 
@@ -138,15 +140,17 @@ async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> 
 
 pub async fn review_function(
     func: &CodeFunction, 
-    remaining_functions: &[CodeFunction]
+    remaining_functions: &std::collections::HashMap<String, String>
 ) -> Result<ReviewedFunction, Box<dyn Error>> {
     // Get the function content from the CodeFunction struct
-    let function_content = &func.content;  // Now using the content directly from CodeFunction
+    let function_content = &func.content;
     
-    let non_reviewed_list = remaining_functions
-        .iter()
-        .map(|f| format!("{}, {}", f.name, f.filepath))
-        .collect::<Vec<_>>()
+    // Convert HashMap keys into a string of function names
+    // Now each key is already in the format "Class:function"
+    let remaining_functions_list = remaining_functions
+        .keys()
+        .map(|key| key.to_string())
+        .collect::<Vec<String>>()
         .join("\n");
 
     let prompt = format!(
@@ -159,21 +163,23 @@ pub async fn review_function(
         {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
         function_content,
         func.filepath,
-        non_reviewed_list
+        remaining_functions_list  // Now contains full function identifiers like "Configuration:__init__"
     );
 
     let response = send_prompt_to_chatgpt(&prompt).await?;
     
+    // Create ReviewedFunction with the full function map
     let return_value = ReviewedFunction {
         name: func.name.clone(),
-        namespace: func.namespace.clone(),  // Now using the namespace from CodeFunction
+        namespace: func.namespace.clone(),
         filepath: func.filepath.clone(),
         start_line: func.start_line,
         end_line: func.end_line,
         review_message: response,
+        function_map: remaining_functions.clone()  // This now contains the full Class:function keys
     };
     
-    trace!("Review completed for function: {}", func.name);
+    trace!("Review completed for function: {}:{}", func.name, func.namespace);
     Ok(return_value)
 }
 
@@ -225,10 +231,10 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
                 // };
 
                     //? remaing_funciotn is an empyt array
-                    let remaining_functions: &[CodeFunction] = &[];
+                    // let remaining_functions:  = &rec.&function_map.clone();
                     let api_key = "";
 
-                    let reviewed = review_function(&rec, remaining_functions).await?;
+                    let reviewed = review_function(&rec, &rec.function_map).await?;
 
                     // let reviewed = ReviewedFunction {
                     //     name: String::from("test"),
@@ -242,11 +248,13 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
 
 
                 //  ? println!("got rec: {:?}", &rec);
+                    
+                    println!("reviewer - archive \n{:#?}", &reviewed);
 
                     //TODO:  here is an example writing to reviewed_tx
                     match cmd.try_send(&mut reviewed_tx, reviewed) {
                         Ok(()) => {
-                            println!("SENT TO ARCHIVE ACTOR")
+                            trace!("Successfully sent review to archive")
                         },
                         Err(msg) => { //in the above await we should have confirmed space is available
                             trace!("error sending: {:?}", msg)
