@@ -77,7 +77,29 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     if should_continue {
         println!("Available functions in map: {:?}", reviewed_function.function_map.keys());
         
-        // Find the full key (Class:function) that ends with the next_function_name
+        // First try exact match (for cases like "Configuration:getDirection")
+        if reviewed_function.function_map.contains_key(next_function) {
+            let filepath = reviewed_function.function_map.get(next_function).unwrap();
+            println!("Found exact matching key: {}", next_function);
+            
+            // Clone the HashMap and remove the found function
+            let mut updated_map = reviewed_function.function_map.clone();
+            updated_map.remove(next_function);
+            
+            trace!("Found next function: {} at {}", next_function, filepath);
+            println!("Found next function: {} at {}", next_function, filepath);
+            
+            // Create the LoopSignal with the necessary information
+            let signal = LoopSignal {
+                key: next_function.to_string(),
+                filepath: filepath.clone(),
+                remaining_functions: updated_map,
+            };
+            println!("Created LoopSignal: {:?}", signal);
+            return Some(signal);
+        }
+        
+        // If no exact match, try the old way (for cases like "getPosition")
         for (key, filepath) in reviewed_function.function_map.iter() {
             println!("Checking key: {}", key);
             // Split the key to get the class and function parts
@@ -97,7 +119,7 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
                     filepath: filepath.clone(),
                     remaining_functions: updated_map,
                 };
-                println!("Created LoopSignal: {:#?}", signal);
+                println!("Created LoopSignal: {:?}", signal);
                 return Some(signal);
             }
         }
