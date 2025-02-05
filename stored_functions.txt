@@ -21,3 +21,44 @@ test4
 {"Configuration:__init__", "/Misc/projects/test-loop/test-graph/game.py", 79, 81}
 {"Configuration:getPosition", "/Misc/projects/test-loop/test-graph/game.py", 83, 84}
 {"Configuration:getDirection", "/Misc/projects/test-loop/test-graph/game.py", 86, 87}
+
+test5 - test-2.txt
+{"Agent:__init__:, ", "/Misc/projects/test-loop/test-graph/game.py", 39, 41}
+{"Actions:getSuccessor", "/Misc/projects/test-loop/test-graph/game.py", 365, 369}
+{"GhostRules:applyAction", "/Misc/projects/test-loop/test-graph/game.py", 1298, 1303}
+{"GhostRules:canKill", "/Misc/projects/test-loop/test-graph/game.py", 1346, 1348}
+{"Configuration:isInteger", "/Misc/projects/test-loop/test-graph/game.py", 89, 91}
+{"ClassicGameRules:agentCrash", "/Misc/projects/test-loop/test-graph/game.py", 1199, 1203}
+{"GameStateData:deepCopy", "/Misc/projects/test-loop/test-graph/game.py", 395, 403}
+{"Grid:__getitem__", "/Misc/projects/test-loop/test-graph/game.py", 180, 181}
+{"ClassicGameRules:getProgress", "/Misc/projects/test-loop/test-graph/game.py", 1196, 1198}
+{"PacmanRules:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 1227, 1231}
+{"Actions:getPossibleActions", "/Misc/projects/test-loop/test-graph/game.py", 332, 348}
+
+test6
+
+{"Agent:__init__:, ", "/Misc/projects/test-loop/test-graph/game.py", 39, 41}
+{"FixedRandom:__init__", "/Misc/projects/test-loop/test-graph/game.py", 1617, 1709}
+{"Queue:pop", "/Misc/projects/test-loop/test-graph/game.py", 1741, 1746}
+{"Stack:pop", "/Misc/projects/test-loop/test-graph/game.py", 1724, 1726}
+{"PacmanRules:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 1227, 1231}
+{"GameState:getLegalPacmanActions", "/Misc/projects/test-loop/test-graph/game.py", 1024, 1025}
+{"GameState:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 979, 990}
+{"GhostRules:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 1283, 1295}
+{"Agent:getAction", "/Misc/projects/test-loop/test-graph/game.py", 42, 47}
+{"GameState:getPacmanState", "/Misc/projects/test-loop/test-graph/game.py", 1033, 1039}
+{"GameStateData:__str__", "/Misc/projects/test-loop/test-graph/game.py", 435, 459}
+{"AgentState:__str__", "/Misc/projects/test-loop/test-graph/game.py", 133, 137}
+{"Configuration:__str__", "/Misc/projects/test-loop/test-graph/game.py", 102, 103}
+{"Grid:_unpackInt", "/Misc/projects/test-loop/test-graph/game.py", 265, 266}
+{"Game:getProgress", "/Misc/projects/test-loop/test-graph/game.py", 534, 539}
+{"ClassicGameRules:getMaxStartupTime", "/Misc/projects/test-loop/test-graph/game.py", 1208, 1209}
+{"Queue:push", "/Misc/projects/test-loop/test-graph/game.py", 1737, 1739}
+{"Grid:copy", "/Misc/projects/test-loop/test-graph/game.py", 206, 209}
+{"Grid:deepCopy", "/Misc/projects/test-loop/test-graph/game.py", 211, 212}
+{"GameStateData:copyAgentStates", "/Misc/projects/test-loop/test-graph/game.py", 405, 410}
+{"AgentState:copy", "/Misc/projects/test-loop/test-graph/game.py", 147, 153}
+{"GameStateData:_pacStr", "/Misc/projects/test-loop/test-graph/game.py", 468, 476}
+{"GhostRules:collide", "/Misc/projects/test-loop/test-graph/game.py", 1333, 1344}
+{"Grid:_cellIndexToPosition", "/Misc/projects/test-loop/test-graph/game.py", 248, 250}
+{"Grid:__init__", "/Misc/projects/test-loop/test-graph/game.py", 170, 178}

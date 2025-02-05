@@ -77,24 +77,24 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
         return Err("Invalid key format in LoopSignal".into());
     }
     
-    let name = parts[0].to_string();
-    let namespace = parts[1].to_string();
+    let name = parts[0].to_string();  // This will be "KeyboardAgent"
+    let namespace = parts[1].to_string();  // This will be "__init__"
     
     // Read the function content using the filepath
-    let file = File::open("test-1.txt")?;  // We should read from test-1.txt instead of signal.filepath
+    let file = File::open("test-2.txt")?;
     let reader = BufReader::new(file);
     let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
     
-    println!("Looking for function in test-1.txt");
+    println!("Looking for function in test-1.txt with name: {} and namespace: {}", name, namespace);
     for line in reader.lines() {
         let line = line?;
         println!("Checking line: {}", line);
         if let Some(captures) = re.captures(&line) {
-            let captured_key = format!("{}:{}", captures[1].to_string(), captures[2].to_string());
-            println!("Captured key: {} vs Signal key: {}", captured_key, signal.key);
+            let captured_name = captures[1].to_string();
+            let captured_namespace = captures[2].to_string();
             
-            // Check if this is the function we're looking for using the full key
-            if captured_key == signal.key {
+            // Compare both parts separately
+            if captured_name == name && captured_namespace == namespace {
                 let start_line: usize = captures[4].parse()?;
                 let end_line: usize = captures[5].parse()?;
                 let actual_filepath = captures[3].to_string();
@@ -118,7 +118,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
         }
     }
     
-    Err(format!("Function '{}' not found in file", signal.key).into())
+    Err(format!("Function '{}:{}' not found in file", name, namespace).into())
 }
 
 pub async fn run(context: SteadyContext
@@ -146,7 +146,7 @@ async fn internal_behavior<C: SteadyCommander>(
         let mut functions_tx = functions_tx.lock().await;
 
         // Initial scrape of functions
-        match extract_function_details("test-1.txt") {
+        match extract_function_details("test-2.txt") {
             Ok(functions) => {
                 trace!("Found {} functions to process", functions.len());
                 

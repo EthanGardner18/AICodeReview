@@ -34,7 +34,7 @@ fn main() {
         graph.start();
 
         {  //remove this block to run forever.
-           std::thread::sleep(Duration::from_secs(60));
+           std::thread::sleep(Duration::from_secs(100));
            graph.request_stop(); //actors can also call stop as desired on the context or monitor
         }
 

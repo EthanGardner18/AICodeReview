@@ -56,21 +56,22 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     // Extract the parts using a more robust approach
     let review_msg = reviewed_function.review_message.trim_matches('{').trim_matches('}');
     
-    // Find the indices of the last three commas
-    let mut comma_indices: Vec<_> = review_msg.match_indices(',').map(|(i, _)| i).collect();
-    if comma_indices.len() < 3 {
-        println!("Not enough commas found in review message");
+    // Split by ", " but keep track of the last three elements
+    let parts: Vec<&str> = review_msg.split(", ").collect();
+    if parts.len() < 4 {
+        println!("Not enough parts found in review message");
         return None;
     }
     
-    // Get the last three comma positions
-    let last_three_commas = &comma_indices[comma_indices.len()-3..];
+    // Get the last three elements
+    let len = parts.len();
+    let continue_flag = parts[len - 3];  // Should be "1" or "0"
+    let next_function = parts[len - 2];  // Next function name
     
-    // Extract the relevant parts
-    let continue_flag = review_msg[last_three_commas[0]+1..last_three_commas[1]].trim();
-    let next_function = review_msg[last_three_commas[1]+1..last_three_commas[2]].trim();
+    // Clean up the continue flag - ensure we get just the number
+    let continue_flag = continue_flag.trim().chars().filter(|c| c.is_digit(10)).collect::<String>();
     
-    println!("Continue flag: {}", continue_flag);
+    println!("Continue flag (cleaned): {}", continue_flag);
     println!("Next function: {}", next_function);
     
     let should_continue = continue_flag == "1";
