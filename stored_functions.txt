@@ -44,7 +44,7 @@ test6
 {"PacmanRules:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 1227, 1231}
 {"GameState:getLegalPacmanActions", "/Misc/projects/test-loop/test-graph/game.py", 1024, 1025}
 {"GameState:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 979, 990}
-{"GhostRules:getLegalActions", "/Misc/projects/test-loop/test-graph/game.py", 1283, 1295}
+{"GhostRules:getLegalActions", "/Misc/projectss/test-loop/test-graph/game.py", 1283, 1295}
 {"Agent:getAction", "/Misc/projects/test-loop/test-graph/game.py", 42, 47}
 {"GameState:getPacmanState", "/Misc/projects/test-loop/test-graph/game.py", 1033, 1039}
 {"GameStateData:__str__", "/Misc/projects/test-loop/test-graph/game.py", 435, 459}
@@ -62,3 +62,11 @@ test6
 {"GhostRules:collide", "/Misc/projects/test-loop/test-graph/game.py", 1333, 1344}
 {"Grid:_cellIndexToPosition", "/Misc/projects/test-loop/test-graph/game.py", 248, 250}
 {"Grid:__init__", "/Misc/projects/test-loop/test-graph/game.py", 170, 178}
+
+test7 stopping?
+
+{"Agent:__init__:, ", "/Misc/projects/test-loop/test-graph/game.py", 39, 41}
+{"Configuration:getPosition", "/Misc/projects/test-loop/test-graph/game.py", 83, 84}
+{"Agent:getAction", "/Misc/projects/test-loop/test-graph/game.py", 42, 47}
+{"Configuration:__init__", "/Misc/projects/test-loop/test-graph/game.py", 79, 81}
+{"Configuration:getDirection", "/Misc/projects/test-loop/test-graph/game.py", 86, 87}

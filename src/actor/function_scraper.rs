@@ -81,7 +81,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     let namespace = parts[1].to_string();  // This will be "__init__"
     
     // Read the function content using the filepath
-    let file = File::open("test-2.txt")?;
+    let file = File::open("test-1.txt")?;
     let reader = BufReader::new(file);
     let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
     
@@ -146,7 +146,7 @@ async fn internal_behavior<C: SteadyCommander>(
         let mut functions_tx = functions_tx.lock().await;
 
         // Initial scrape of functions
-        match extract_function_details("test-2.txt") {
+        match extract_function_details("test-1.txt") {
             Ok(functions) => {
                 trace!("Found {} functions to process", functions.len());
                 

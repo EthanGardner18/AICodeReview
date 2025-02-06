@@ -132,8 +132,14 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
         println!("Review process complete (flag = 0)");
     }
     
-    println!("Returning None from process_review_and_update_map");
-    None
+    // If we reach here, we can still return a LoopSignal with an empty remaining_functions
+    let signal = LoopSignal {
+        key: String::from(""),
+        filepath: String::from(""),
+        remaining_functions: HashMap::new(), // Allow empty map to indicate no more functions
+    };
+    println!("Returning LoopSignal with no remaining functions");
+    return Some(signal);
 }
 
 // pub async fn process_reviewed_function(mut reviewed_function: ReviewedFunction) -> Result<(), Box<dyn Error>> {
@@ -204,7 +210,13 @@ async fn internal_behavior<C: SteadyCommander>(
                         }
                     } else {
                         trace!("No next function to process");
-                        cmd.request_graph_stop();
+                        if cmd.wait_shutdown().await
+                        {
+                            print!("Code is done");
+                        }
+                        print!("outside if");
+                        // cmd.request_graph_stop();
+
                     }
 
                     // Write the current review to file

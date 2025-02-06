@@ -33,10 +33,10 @@ fn main() {
         let mut graph = build_graph(GraphBuilder::default().build(opt.clone()) );
         graph.start();
 
-        {  //remove this block to run forever.
-           std::thread::sleep(Duration::from_secs(100));
-           graph.request_stop(); //actors can also call stop as desired on the context or monitor
-        }
+        // {  //remove this block to run forever.
+        //    std::thread::sleep(Duration::from_secs(100));
+        //    graph.request_stop(); //actors can also call stop as desired on the context or monitor
+        // }
 
         graph.block_until_stopped(Duration::from_secs(2));
     }
