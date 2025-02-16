@@ -8,7 +8,9 @@ use steady_state::*;
 
 mod actor {
     
-        pub mod input_printer_actor;
+        pub mod parse_function;
+        pub mod read_directory;
+        pub mod read_file;
 }
 
 fn main() {
@@ -18,8 +20,8 @@ fn main() {
         eprint!("Warning: Logger initialization failed with {:?}. There will be no logging.", e);
     }
 
-    let service_executable_name = "project_name";
-    let service_user = "project_name_user";
+    let service_executable_name = "version_3";
+    let service_user = "version_3_user";
     let systemd_command = SystemdBuilder::process_systemd_commands(  opt.systemd_action()
                                                    , opt.to_cli_string(service_executable_name)
                                                    , service_executable_name
@@ -29,11 +31,12 @@ fn main() {
         info!("Starting up");
         let mut graph = build_graph(GraphBuilder::default().build(opt.clone()) );
         graph.start();
-
         {  //remove this block to run forever.
            std::thread::sleep(Duration::from_secs(60));
            graph.request_stop(); //actors can also call stop as desired on the context or monitor
         }
+
+       
 
         graph.block_until_stopped(Duration::from_secs(2));
     }
@@ -53,13 +56,39 @@ fn build_graph(mut graph: Graph) -> Graph {
 
     //build channels
     
+    let (readdirectory_file_list_tx, readfile_file_list_rx) = base_channel_builder
+        .with_capacity(50)
+        .build();
+    
+    let (readfile_file_content_tx, parsefunction_file_content_rx) = base_channel_builder
+        .with_capacity(50)
+        .build();
+    
     //build actors
     
     {
      let state = new_state();
     
-     base_actor_builder.with_name("InputPrinter")
-                 .build( move |context| actor::input_printer_actor::run(context, state.clone() )
+     base_actor_builder.with_name("ParseFunction")
+                 .build( move |context| actor::parse_function::run(context
+                                            , parsefunction_file_content_rx.clone(), state.clone() )
+                  , &mut Threading::Spawn );
+    }
+    {
+     let state = new_state();
+    
+     base_actor_builder.with_name("ReadDirectory")
+                 .build( move |context| actor::read_directory::run(context
+                                            , readdirectory_file_list_tx.clone(), state.clone() )
+                  , &mut Threading::Spawn );
+    }
+    {
+     let state = new_state();
+    
+     base_actor_builder.with_name("ReadFile")
+                 .build( move |context| actor::read_file::run(context
+                                            , readfile_file_list_rx.clone()
+                                            , readfile_file_content_tx.clone(), state.clone() )
                   , &mut Threading::Spawn );
     }
     graph
@@ -92,12 +121,32 @@ mod graph_tests {
              //NOTE: to ensure the node_call is for the correct channel for a given actor unique types for each channel are required
 
             
+                     //TODO:   Adjust as needed to inject test values into the graph
+                     //  let response = plane.call_actor(Box::new(FileContent::default()), "ParseFunction").await;
+                     //  if let Some(msg) = response { // ok indicates the message was echoed
+                     //     //trace!("response: {:?} {:?}", msg.downcast_ref::<String>(),i);
+                     //     assert_eq!("ok", msg.downcast_ref::<String>().expect("bad type"));
+                     //  } else {
+                     //     error!("bad response from generator: {:?}", response);
+                     //    // panic!("bad response from generator: {:?}", response);
+                     //  }
+                
                 
 
               // //TODO:   if needed you may want to add a delay right here to allow the graph to process the message
               Delay::new(Duration::from_millis(100)).await;
 
              
+                
+                     //TODO:   Adjust as needed to test the values produced by the graph
+                     //  let response = plane.call_actor(Box::new(FileMetadata::default()), "ReadDirectory").await;
+                     //  if let Some(msg) = response { // ok indicates the expected structure instance matched
+                     //     //trace!("response: {:?} {:?}", msg.downcast_ref::<String>(),i);
+                     //     assert_eq!("ok", msg.downcast_ref::<String>().expect("bad type"));
+                     //  } else {
+                     //     error!("bad response from generator: {:?}", response);
+                     //    // panic!("bad response from generator: {:?}", response);
+                     //  }
                 
 
             }
