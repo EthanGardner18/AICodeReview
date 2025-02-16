@@ -1,4 +1,3 @@
-
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -6,15 +5,13 @@ use std::time::Duration;
 use steady_state::*;
 use crate::Args;
 use std::error::Error;
+use std::io;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct FileMetadata {
-  /// The initial directories (or other info) you may want to pass.
-    /// List of files found that match the desired extensions.
-    pub found_files: Vec<PathBuf>,
+    pub path: String, //TODO:  remove dummy and put your channel message fields here
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -59,8 +56,6 @@ fn scan_directory_for_files(path: &Path, extensions: &[&str]) -> Vec<PathBuf> {
     found_files
 }
 
-
-
 async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_list_tx: SteadyTx<FileMetadata>, state: SteadyState<ReaddirectoryInternalState>
  ) -> Result<(),Box<dyn Error>> {
 
@@ -69,47 +64,54 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_list_tx: SteadyTx
 
    //every read and write channel must be locked for this instance use, this is outside before the loop
    let mut file_list_tx = file_list_tx.lock().await;
-   
-    let input = "/home/rpoudel/SeniorDesign/test";
-
-    println!("The inputted directory is {}", input);
 
    //this is the main loop of the actor, will run until shutdown is requested.
    //the closure is called upon shutdown to determine if we need to postpone the shutdown
-           if input.eq_ignore_ascii_case("exit") {
-            println!("Exiting program.");
-        } else {
-            // Define the coding file extensions to filter for.
-            let coding_extensions = [
+   while cmd.is_running(&mut ||file_list_tx.mark_closed()) {
+
+     // our loop avoids spinning by using await here on multiple criteria. clean is false if await
+     // returned early due to a shutdown request or closed channel.
+        let clean = await_for_all!(cmd.wait_periodic(Duration::from_millis(1000))    );
+        let mut input_path = String::new();
+        println!("Enter the file path:");
+        io::stdin().read_line(&mut input_path).expect("Failed to read line");
+
+       // Trim to remove trailing newline
+        let input_path = input_path.trim().to_string();
+
+        let input_dir = PathBuf::from(input_path.clone());
+
+        let coding_extensions = [
                 "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java",
                 "go", "html", "htm", "css", "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm",
                 "r", "md",
             ];
+  
+        let found_files = scan_directory_for_files(&input_dir, &coding_extensions);
 
-            // Convert the input into a PathBuf and store it (if you want to keep track of the initial directory).
-            let input_dir = PathBuf::from(input);
-
-
-            // Call our helper function to scan the directory for files matching the extensions.
-            let found_files = scan_directory_for_files(&input_dir, &coding_extensions);
-            
-            // Iterate over found files and send them through the channel
-            let file_metadata = FileMetadata { found_files };
-            
-            match cmd.try_send(&mut file_list_tx, file_metadata) {
-                    Ok(()) => {
-                        info!("File metadata sent successfully");
-                    }
-                    Err(msg) => {
-                        trace!("Error sending file metadata: {:?}", msg);
-                    }
-                }
+        for file_path in &found_files 
+        {
+          let data = FileMetadata {
+            path: file_path.display().to_string(),
+          };
+        
+        //TODO:  here is an example writing to file_list_tx
+       
+        match cmd.try_send(&mut file_list_tx, data.clone() ) {
+            Ok(()) => {
+             println!("Initial message being sent is: {:?}", data);
+              println!("Message sent successfully");
+             // break;
+            },
+            Err(msg) => { //in the above await we should have confirmed space is available
+                trace!("error sending: {:?}", msg)
+            },
         }
-   
-   
-   
-   
- 
+    
+      }
+  
+
+      }
     }
     Ok(())
 }
