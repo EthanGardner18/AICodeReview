@@ -26,7 +26,7 @@ cargo run --release
 ## Adding an Image
 To include an image in this README, use the following syntax:
 
-[Project Diagram](images/ai-codebase-review.png)
+![Project-Diagram](images/ai-codebase-review.png)
 
 
 Replace `assets/logo.png` with the correct path to your image file.
