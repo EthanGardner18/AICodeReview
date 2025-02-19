@@ -9,15 +9,127 @@ use std::error::Error;
 use crate::actor::archive::LoopSignal;
 use crate::actor::parse_function::ParsedCode;
 
-#[derive(Default,Clone,Debug,Eq,PartialEq,Copy)]
+use regex::Regex;
+use std::fs::File;
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
+
+
+
+#[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct CodeFunction {
-   _dummy: u8 //TODO:  remove dummy and put your channel message fields here
+    pub name: String,
+    pub namespace: String,
+    pub filepath: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub content: String,
+    pub function_map: HashMap<String, String>,
 }
 
 //if no internal state is required (recommended) feel free to remove this.
 #[derive(Default)]
 pub(crate) struct FunctionscraperInternalState {
 }
+
+
+
+
+
+fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
+    
+    let mut function_details = HashMap::new();
+    
+    for line in reader.lines() {
+        let line = line?;
+        if let Some(captures) = re.captures(&line) {
+            // Get the function content from the specified file and lines
+            let name = captures[1].to_string();
+            let namespace = captures[2].to_string();
+            let filepath = captures[3].to_string();
+            let start_line: usize = captures[4].parse()?;
+            let end_line: usize = captures[5].parse()?;
+            
+            // Read the actual function content from the specified file
+            let content = read_function_content(&filepath, start_line, end_line)?;
+            
+            // Create a unique key combining name and namespace
+            let key = format!("{}:{}", name, namespace);
+            function_details.insert(key, filepath.clone());
+        }
+    }
+    
+    Ok(function_details)
+}
+
+fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
+    let file = File::open(filepath)?;
+    let reader = BufReader::new(file);
+    let lines: Vec<String> = reader.lines()
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let content = lines[start_line - 1..end_line]
+        .join("\n");
+    
+    Ok(content)
+}
+
+fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
+    println!("Extracting function from signal: {:?}", signal);
+    
+    // The key is already in the correct format "Class:function", so we can split it directly
+    let parts: Vec<&str> = signal.key.split(':').collect();
+    if parts.len() != 2 {
+        return Err("Invalid key format in LoopSignal".into());
+    }
+    
+    let name = parts[0].to_string();  // This will be "KeyboardAgent"
+    let namespace = parts[1].to_string();  // This will be "__init__"
+    
+    // Read the function content using the filepath
+    let file = File::open("/Misc/projects/test-loop/test-databases/jarvis-desktop-voice-assistant/Jarvis-Desktop-Voice-Assistant/Data/hashmap_function.txt")?;
+    let reader = BufReader::new(file);
+    let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
+    
+    println!("Looking for function in test-2.txt with name: {} and namespace: {}", name, namespace);
+    for line in reader.lines() {
+        let line = line?;
+        println!("Checking line: {}", line);
+        if let Some(captures) = re.captures(&line) {
+            let captured_name = captures[1].to_string();
+            let captured_namespace = captures[2].to_string();
+            
+            // Compare both parts separately
+            if captured_name == name && captured_namespace == namespace {
+                let start_line: usize = captures[4].parse()?;
+                let end_line: usize = captures[5].parse()?;
+                let actual_filepath = captures[3].to_string();
+                
+                println!("Found matching function. Reading content from {} lines {}-{}", 
+                    actual_filepath, start_line, end_line);
+                
+                // Read the actual function content from the actual filepath
+                let content = read_function_content(&actual_filepath, start_line, end_line)?;
+                
+                return Ok(CodeFunction {
+                    name,
+                    namespace,
+                    filepath: actual_filepath,
+                    start_line,
+                    end_line,
+                    content,
+                    function_map: signal.remaining_functions.clone(),
+                });
+            }
+        }
+    }
+    
+    Err(format!("Function '{}:{}' not found in file", name, namespace).into())
+}
+
 
 
 pub async fn run(context: SteadyContext
@@ -53,41 +165,51 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,loop_feedback_rx: Stea
      // returned early due to a shutdown request or closed channel.
          let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut parsed_code_rx,1)    );
 
+
+
+
+
+
+
+
+
+
+
   
-          //TODO:  here is an example reading from loop_feedback_rx
-          match cmd.try_take(&mut loop_feedback_rx) {
-              Some(rec) => {
-                  trace!("got rec: {:?}", rec);
-              }
-              None => {
-                  if clean {
-                     //this could be an error if we expected a value
-                  }
-              }
-          }
-  
-  
-          //TODO:  here is an example reading from parsed_code_rx
-          match cmd.try_take(&mut parsed_code_rx) {
-              Some(rec) => {
-                  trace!("got rec: {:?}", rec);
-              }
-              None => {
-                  if clean {
-                     //this could be an error if we expected a value
-                  }
-              }
-          }
+        //   //TODO:  here is an example reading from loop_feedback_rx
+        //   match cmd.try_take(&mut loop_feedback_rx) {
+        //       Some(rec) => {
+        //           trace!("got rec: {:?}", rec);
+        //       }
+        //       None => {
+        //           if clean {
+        //              //this could be an error if we expected a value
+        //           }
+        //       }
+        //   }
   
   
-        //TODO:  here is an example writing to functions_tx
-        match cmd.try_send(&mut functions_tx, CodeFunction::default() ) {
-            Ok(()) => {
-            },
-            Err(msg) => { //in the above await we should have confirmed space is available
-                trace!("error sending: {:?}", msg)
-            },
-        }
+        //   //TODO:  here is an example reading from parsed_code_rx
+        //   match cmd.try_take(&mut parsed_code_rx) {
+        //       Some(rec) => {
+        //           trace!("got rec: {:?}", rec);
+        //       }
+        //       None => {
+        //           if clean {
+        //              //this could be an error if we expected a value
+        //           }
+        //       }
+        //   }
+  
+  
+        // //TODO:  here is an example writing to functions_tx
+        // match cmd.try_send(&mut functions_tx, CodeFunction::default() ) {
+        //     Ok(()) => {
+        //     },
+        //     Err(msg) => { //in the above await we should have confirmed space is available
+        //         trace!("error sending: {:?}", msg)
+        //     },
+        // }
   
 
       }
