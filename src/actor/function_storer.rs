@@ -8,10 +8,40 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::archive::ArchivedFunction;
 
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::Path;
+
 
 //if no internal state is required (recommended) feel free to remove this.
 #[derive(Default)]
 pub(crate) struct FunctionstorerInternalState {
+}
+
+
+
+async fn store_function(function: &ArchivedFunction) -> Result<(), Box<dyn Error>> {
+    let output_path = "stored_functions.txt";
+    
+    // Open file in append mode, create if doesn't exist
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(output_path)?;
+
+    //Format: {"function_name:namespace", "filepath", start_line, end_line}
+    let entry = format!(
+        "{{\"{}:{}\", \"{}\", {}, {}}}\n",
+        function.name,
+        function.namespace,
+        function.filepath,
+        function.start_line,
+        function.end_line
+    );
+
+    file.write_all(entry.as_bytes())?;
+    
+    Ok(())
 }
 
 #[cfg(not(test))]
@@ -47,16 +77,19 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,archived_rx: SteadyRx<
   
           //TODO:  here is an example reading from archived_rx
           match cmd.try_take(&mut archived_rx) {
-              Some(rec) => {
-                  trace!("got rec: {:?}", rec);
-              }
-              None => {
-                  if clean {
-                     //this could be an error if we expected a value
-                  }
-              }
-          }
-  
+            Some(function) => {
+                if let Err(e) = store_function(&function).await {
+                    error!("Failed to store function: {}", e);
+                } else {
+                    trace!("Stored function: {:?}", function);
+                }
+            }
+            None => {
+                if clean {
+                   trace!("No function available to process");
+                }
+            }
+        }
 
       }
     }
