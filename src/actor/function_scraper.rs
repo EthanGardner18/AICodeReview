@@ -1,4 +1,3 @@
-
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -16,7 +15,8 @@ use std::io::{BufRead, BufReader};
 
 
 
-#[derive(Default,Clone,Debug,Eq,PartialEq)]
+
+#[derive(Clone,Debug,Eq,PartialEq)]
 pub(crate) struct CodeFunction {
     pub name: String,
     pub namespace: String,
@@ -27,38 +27,51 @@ pub(crate) struct CodeFunction {
     pub function_map: HashMap<String, String>,
 }
 
+
+impl Default for CodeFunction {
+    fn default() -> Self {
+        CodeFunction {
+            name: String::new(),
+            namespace: String::new(),
+            filepath: String::new(),
+            start_line: 0,
+            end_line: 0,
+            content: String::new(),
+            function_map: HashMap::new(),
+        }
+    }
+}
+
 //if no internal state is required (recommended) feel free to remove this.
 #[derive(Default)]
 pub(crate) struct FunctionscraperInternalState {
 }
 
 
-
-
-
 fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
-    let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
     
+    // New regex to match: {"function_name", "file_path", start_line, end_line}
+    let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
+
     let mut function_details = HashMap::new();
     
     for line in reader.lines() {
         let line = line?;
         if let Some(captures) = re.captures(&line) {
-            // Get the function content from the specified file and lines
-            let name = captures[1].to_string();
-            let namespace = captures[2].to_string();
-            let filepath = captures[3].to_string();
-            let start_line: usize = captures[4].parse()?;
-            let end_line: usize = captures[5].parse()?;
+            // Extract function name and file path
+            let function_name = captures[1].to_string();
+            let filepath = captures[2].to_string();
             
-            // Read the actual function content from the specified file
-            let content = read_function_content(&filepath, start_line, end_line)?;
+            // Create composite key in format "filepath:function_name"
+            let composite_key = format!("{}:{}", filepath, function_name);
             
-            // Create a unique key combining name and namespace
-            let key = format!("{}:{}", name, namespace);
-            function_details.insert(key, filepath.clone());
+            // Debug print
+            println!("🔍 Extracted -> Composite Key: {} | Path: {}", composite_key, filepath);
+
+            // Insert into HashMap: Key = filepath:function_name, Value = filepath
+            function_details.insert(composite_key, filepath);
         }
     }
     
@@ -80,44 +93,38 @@ fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> 
 fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
     println!("Extracting function from signal: {:?}", signal);
     
-    // The key is already in the correct format "Class:function", so we can split it directly
-    let parts: Vec<&str> = signal.key.split(':').collect();
-    if parts.len() != 2 {
-        return Err("Invalid key format in LoopSignal".into());
-    }
+    let function_name = signal.key.clone();
     
-    let name = parts[0].to_string();  // This will be "KeyboardAgent"
-    let namespace = parts[1].to_string();  // This will be "__init__"
-    
-    // Read the function content using the filepath
-    let file = File::open("/Misc/projects/test-loop/test-databases/jarvis-desktop-voice-assistant/Jarvis-Desktop-Voice-Assistant/Data/hashmap_function.txt")?;
+    // Changed from "test-1.txt" to "test.txt" to use the same file
+    let file = File::open("test.txt")?;
     let reader = BufReader::new(file);
-    let re = Regex::new(r#"\{"([^:]+):([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\}"#)?;
     
-    println!("Looking for function in test-2.txt with name: {} and namespace: {}", name, namespace);
+    let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
+
+    println!("🔍 Looking for function in test.txt with name: {}", function_name);
+
     for line in reader.lines() {
         let line = line?;
         println!("Checking line: {}", line);
+
         if let Some(captures) = re.captures(&line) {
             let captured_name = captures[1].to_string();
-            let captured_namespace = captures[2].to_string();
-            
-            // Compare both parts separately
-            if captured_name == name && captured_namespace == namespace {
-                let start_line: usize = captures[4].parse()?;
-                let end_line: usize = captures[5].parse()?;
-                let actual_filepath = captures[3].to_string();
-                
-                println!("Found matching function. Reading content from {} lines {}-{}", 
-                    actual_filepath, start_line, end_line);
-                
-                // Read the actual function content from the actual filepath
-                let content = read_function_content(&actual_filepath, start_line, end_line)?;
-                
+            let filepath = captures[2].to_string();
+            let start_line: usize = captures[3].parse()?;
+            let end_line: usize = captures[4].parse()?;
+
+            // Check if the function name matches exactly
+            if captured_name == function_name {
+                println!("✅ Found matching function. Reading content from {} (lines {}-{})", 
+                    filepath, start_line, end_line);
+
+                // Read the actual function content from the file
+                let content = read_function_content(&filepath, start_line, end_line)?;
+
                 return Ok(CodeFunction {
-                    name,
-                    namespace,
-                    filepath: actual_filepath,
+                    name: function_name,
+                    namespace: String::from(""),
+                    filepath,
                     start_line,
                     end_line,
                     content,
@@ -126,11 +133,9 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
             }
         }
     }
-    
-    Err(format!("Function '{}:{}' not found in file", name, namespace).into())
+
+    Err(format!("❌ Function '{}' not found in file", function_name).into())
 }
-
-
 
 pub async fn run(context: SteadyContext
         ,loop_feedback_rx: SteadyRx<LoopSignal>
@@ -146,113 +151,99 @@ pub async fn run(context: SteadyContext
   internal_behavior(cmd,loop_feedback_rx,parsed_code_rx, functions_tx, state).await
 }
 
-async fn internal_behavior<C: SteadyCommander>(mut cmd: C,loop_feedback_rx: SteadyRx<LoopSignal>,parsed_code_rx: SteadyRx<ParsedCode>,functions_tx: SteadyTx<CodeFunction>, state: SteadyState<FunctionscraperInternalState>
- ) -> Result<(),Box<dyn Error>> {
+async fn internal_behavior<C: SteadyCommander>(
+    mut cmd: C,
+    loop_feedback_rx: SteadyRx<LoopSignal>,
+    parsed_code_rx: SteadyRx<ParsedCode>,
+    functions_tx: SteadyTx<CodeFunction>,
+    state: SteadyState<FunctionscraperInternalState>,
+) -> Result<(), Box<dyn Error>> {
+    println!("🚀 FunctionScraper is fired up.");
 
     let mut state_guard = steady_state(&state, || FunctionscraperInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
+        let mut parsed_code_rx = parsed_code_rx.lock().await;
+        let mut loop_feedback_rx = loop_feedback_rx.lock().await;
+        let mut functions_tx = functions_tx.lock().await;
 
-   //every read and write channel must be locked for this instance use, this is outside before the loop
-   let mut loop_feedback_rx = loop_feedback_rx.lock().await;
-   let mut parsed_code_rx = parsed_code_rx.lock().await;
-   let mut functions_tx = functions_tx.lock().await;
+        println!("📌 Entering main loop of FunctionScraper...");
+        let mut loop_check = true;
 
-   //this is the main loop of the actor, will run until shutdown is requested.
-   //the closure is called upon shutdown to determine if we need to postpone the shutdown
-   while cmd.is_running(&mut ||loop_feedback_rx.is_closed_and_empty() && parsed_code_rx.is_closed_and_empty() && functions_tx.mark_closed()) {
+        while cmd.is_running(&mut || parsed_code_rx.is_closed_and_empty() && functions_tx.mark_closed() && loop_feedback_rx.is_closed_and_empty()) {
+            println!("✅ Inside the loop!");
 
-     // our loop avoids spinning by using await here on multiple criteria. clean is false if await
-     // returned early due to a shutdown request or closed channel.
-         let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut parsed_code_rx,1)    );
+            // Wait for messages from both channels
+            if loop_check {
+                let _clean = await_for_all!(
+                    cmd.wait_closed_or_avail_units(&mut parsed_code_rx, 1)
+                    // cmd.wait_closed_or_avail_units(&mut loop_feedback_rx, 1)
+                );
+                while let Some(parsed_code) = cmd.try_take(&mut parsed_code_rx) {
+                    println!("✅ Received ParsedCode: {:?}", parsed_code);
+                    
+                    // Create initial CodeFunction from the first function
+                    if let Ok(functions) = extract_function_details("test.txt") {
+                        if let Some(captures) = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)
+                            .unwrap()
+                            .captures(&parsed_code.firstFunction) 
+                        {
+                            let function_name = captures[1].to_string();
+                            let path = captures[2].to_string();
+                            let start_line: usize = captures[3].parse().unwrap_or(0);
+                            let last_line: usize = captures[4].parse().unwrap_or(0);
+    
+                            if let Ok(function_content) = read_function_content(&path, start_line, last_line) {
+                                let container = CodeFunction {
+                                    name: function_name,
+                                    namespace: String::from("global"),
+                                    filepath: path, 
+                                    start_line,
+                                    end_line: last_line,
+                                    content: function_content,
+                                    function_map: functions,
+                                };
+                                
+                                println!("📤 Sending initial function: {:?}", container.name);
+                                if let Err(e) = cmd.try_send(&mut functions_tx, container) {
+                                    error!("❌ Failed to send initial function: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                let _clean = await_for_all!(
+                    cmd.wait_avail_units(&mut loop_feedback_rx, 1)
+                );
+
+                while let Some(signal) = cmd.try_take(&mut loop_feedback_rx) {
+                    match extract_function_from_signal(&signal) {
+                        Ok(next_function) => {
+                            println!("📤 Sending next function: {:?}", next_function.name);
+                            if let Err(e) = cmd.try_send(&mut functions_tx, next_function) {
+                                error!("❌ Failed to send function to reviewer: {:?}", e);
+                            }
+                        },
+                        Err(e) => {
+                            error!("❌ Failed to extract function from signal: {:?}", e);
+                            cmd.request_graph_stop();
+                        }
+                    }
+                }
+            }
+            loop_check = false;
 
 
+            // Process any available parsed code messages
+            
+
+            // Wait for and process any loop feedback signals
+            // let _clean = await_for_all!(
+            //     cmd.wait_closed_or_avail_units(&mut loop_feedback_rx, 1)
+            // );
 
 
-
-
-
-
-
-
-
-  
-        //   //TODO:  here is an example reading from loop_feedback_rx
-        //   match cmd.try_take(&mut loop_feedback_rx) {
-        //       Some(rec) => {
-        //           trace!("got rec: {:?}", rec);
-        //       }
-        //       None => {
-        //           if clean {
-        //              //this could be an error if we expected a value
-        //           }
-        //       }
-        //   }
-  
-  
-        //   //TODO:  here is an example reading from parsed_code_rx
-        //   match cmd.try_take(&mut parsed_code_rx) {
-        //       Some(rec) => {
-        //           trace!("got rec: {:?}", rec);
-        //       }
-        //       None => {
-        //           if clean {
-        //              //this could be an error if we expected a value
-        //           }
-        //       }
-        //   }
-  
-  
-        // //TODO:  here is an example writing to functions_tx
-        // match cmd.try_send(&mut functions_tx, CodeFunction::default() ) {
-        //     Ok(()) => {
-        //     },
-        //     Err(msg) => { //in the above await we should have confirmed space is available
-        //         trace!("error sending: {:?}", msg)
-        //     },
-        // }
-  
-
-      }
+        }
     }
     Ok(())
-}
-
-
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use std::time::Duration;
-    use steady_state::*;
-    use super::*;
-
-    #[async_std::test]
-    pub(crate) async fn test_simple_process() {
-       let mut graph = GraphBuilder::for_testing().build(());
-       let (test_loop_feedback_tx,loop_feedback_rx) = graph.channel_builder().with_capacity(4).build();
-       
-       let (test_parsed_code_tx,parsed_code_rx) = graph.channel_builder().with_capacity(4).build();
-       
-       let (functions_tx,test_functions_rx) = graph.channel_builder().with_capacity(4).build();
-       let state = new_state();
-       graph.actor_builder()
-                    .with_name("UnitTest")
-                    .build_spawn( move |context|
-                            internal_behavior(context, loop_feedback_rx.clone(), parsed_code_rx.clone(), functions_tx.clone(), state.clone())
-                     );
-
-       graph.start(); //startup the graph
-       //TODO:  adjust this vec content to make a valid test
-       test_loop_feedback_tx.testing_send_all(vec![LoopSignal::default()],true).await;
-
-        
-       //TODO:  adjust this vec content to make a valid test
-       test_parsed_code_tx.testing_send_all(vec![ParsedCode::default()],true).await;
-
-        
-       graph.request_stop();
-       graph.block_until_stopped(Duration::from_secs(15));
-       //TODO:  confirm values on the output channels
-       //    assert_eq!(test_functions_rx.testing_avail_units().await, 1); // check expected count
-       let results_functions_vec = test_functions_rx.testing_take().await;
-        }
 }

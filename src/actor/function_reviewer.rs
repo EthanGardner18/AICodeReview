@@ -1,4 +1,3 @@
-
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -93,33 +92,62 @@ pub async fn review_function(
     func: &CodeFunction, 
     remaining_functions: &std::collections::HashMap<String, String>
 ) -> Result<ReviewedFunction, Box<dyn Error>> {
-    // Get the function content from the CodeFunction struct
     let function_content = &func.content;
     
-    // Convert HashMap keys into a string of function names
-    // Now each key is already in the format "Class:function"
     let remaining_functions_list = remaining_functions
         .keys()
         .map(|key| key.to_string())
         .collect::<Vec<String>>()
         .join("\n");
 
-    let prompt = format!(
-        "I am conducting an AI Code Review of my entire project base. Here is the content of the function you thought it was important. \
-        Along with its path.\n\n{}\n{}\n\n\
-        I want you to provide me a review of this piece of code in 200 words or less. The next step for you would be to decide the next function you want to look at. \
-        Here is the list of not reviewed functions:\n\
-        {}\n\n\
-        I want the format of your message to be like this. No other text and explanation.\n\
-        {{function_name, review of the current function, flag if you want to review next function(0 if you are done with the entire review, and 1 if you want to read more functions), next_function, next_function_path}}",
-        function_content,
-        func.filepath,
-        remaining_functions_list  // Now contains full function identifiers like "Configuration:__init__"
-    );
+   let prompt = format!(
+    "You are an advanced AI Code Review Agent with over 10 years of software engineering experience, fluent in all major programming languages and paradigms. \
+    Your role is to conduct an in-depth code review of an entire project, function-by-function, with the expertise and diligence of a seasoned senior engineer. \
+    You’re expected to spot bugs, inefficiencies, anti-patterns, and logic flaws while also reviewing the function’s clarity, maintainability, and purpose alignment. \
+    You are context-aware and meticulous, paying attention to the function body as well as inline comments to deduce developer intent and possible deviations.\n\n\
+    The code review is being conducted in an iterative loop-based structure: \
+    At each step, you are given the content of a single function that you previously identified as important to review. \
+    Alongside it, you are shown a list of remaining functions that have not yet been reviewed. \
+    After reviewing the current function, you must decide whether to continue reviewing additional functions or conclude the review if you believe a sufficient assessment has been made.\n\n\
+    This iterative review structure is designed to leverage your ability to maintain short-term memory context effectively. \
+    By focusing on one function at a time and assessing remaining ones, your responses provide a more focused and coherent review process than bulk analysis.\n\n\
+    Each of your responses must follow the **strict structured format** described below. \
+    You must begin your review with one of the following severity levels, marked in **markdown format**:\n\
+    - **Low** (🟢): Minor, mostly stylistic suggestions; function is safe to ship.\n\
+    - **Moderate** (🟡): Functionally fine but has maintainability or clarity concerns.\n\
+    - **Severe** (🔴): Critical issues affecting performance, logic, or stability.\n\n\
+    === CURRENT FUNCTION FOR REVIEW ===\n\
+    Below is the function you previously marked as important, along with its file path:\n\n{}\n{}\n\n\
+    === LIST OF REMAINING FUNCTIONS ===\n\
+    Here are the remaining functions that haven’t been reviewed yet. After completing the current function’s review, \
+    you must select the next function to review from this list. If you feel your review is comprehensive enough already, \
+    you may choose to stop here.\n\
+    {}\n\n\
+    === RESPONSE FORMAT (STRICT) ===\n\
+    Your response **must** follow this exact structure:\n\
+    {{functionName, functionReview, number, nextFunctionName, nextFunctionPath}}\n\n\
+    Where:\n\
+    - `functionName`: Name of the function you're reviewing now.\n\
+    - `functionReview`: A concise, professional review in 200 words or fewer, with no line breaks.\n\
+    - `number`: 1 if you want to continue reviewing more functions, 0 if you’re satisfied with your assessment.\n\
+    - `nextFunctionName`: Name of the next function you want to review (only if number is 1).\n\
+    - `nextFunctionPath`: Full path to the next function file (only if number is 1).\n\n\
+    Example response:\n\
+    {{processFile, This function handles file processing with good error handling, 1, validateInput, src/utils.rs}}\n\n\
+    CRITICAL RESPONSE FORMAT REQUIREMENTS:\n\
+    1. Respond ONLY with this exact format: {{function_name, review_text, number, next_function_name, path/to/file}}\n\
+    2. Do NOT use any markdown, quotes, backticks, or any other formatting in the response block itself\n\
+    3. Do NOT add any additional text before or after the response\n\
+    4. Do NOT include any line breaks in the review text\n\
+    5. The response must be a single line in the exact format shown",
+    function_content,
+    func.filepath,
+    remaining_functions_list
+);
+
 
     let response = send_prompt_to_chatgpt(&prompt).await?;
     
-    // Create ReviewedFunction with the full function map
     let return_value = ReviewedFunction {
         name: func.name.clone(),
         namespace: func.namespace.clone(),
@@ -127,7 +155,7 @@ pub async fn review_function(
         start_line: func.start_line,
         end_line: func.end_line,
         review_message: response,
-        function_map: remaining_functions.clone()  // This now contains the full Class:function keys
+        function_map: remaining_functions.clone()
     };
     
     trace!("Review completed for function: {}:{}", func.name, func.namespace);
@@ -151,6 +179,7 @@ pub async fn run(context: SteadyContext
 
 async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx<CodeFunction>,reviewed_tx: SteadyTx<ReviewedFunction>, state: SteadyState<FunctionreviewerInternalState>
  ) -> Result<(),Box<dyn Error>> {
+    println!("Reviewer actor is fired up🚀");
 
     let mut state_guard = steady_state(&state, || FunctionreviewerInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
@@ -203,7 +232,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
                   //TODO:  here is an example writing to reviewed_tx
                   match cmd.try_send(&mut reviewed_tx, reviewed) {
                       Ok(()) => {
-                          trace!("Successfully sent review to archive")
+                          println!("Successfully sent review to archive")
                       },
                       Err(msg) => { //in the above await we should have confirmed space is available
                           trace!("error sending: {:?}", msg)

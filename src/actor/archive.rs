@@ -1,4 +1,3 @@
-
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -37,7 +36,7 @@ pub(crate) struct ArchiveInternalState {
 
 
 pub async fn write_review_to_file(review_content: &str) -> Result<(), Box<dyn Error>> {
-    let file_path = "reviewed_information.md";
+    let file_path = "stored_functions.txt";
     
     // Open file in append mode, create if doesn't exist
     let mut file = OpenOptions::new()
@@ -69,28 +68,34 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     let len = parts.len();
     let continue_flag = parts[len - 3];  // Should be "1" or "0"
     let next_function = parts[len - 2];  // Next function name
+    let next_filepath = parts[len - 1];  // File path from GPT response
     
     // Clean up the continue flag - ensure we get just the number
     let continue_flag = continue_flag.trim().chars().filter(|c| c.is_digit(10)).collect::<String>();
     
     println!("Continue flag (cleaned): {}", continue_flag);
     println!("Next function: {}", next_function);
+    println!("Next filepath: {}", next_filepath);
     
     let should_continue = continue_flag == "1";
     if should_continue {
         println!("Available functions in map: {:?}", reviewed_function.function_map.keys());
         
-        // First try exact match (for cases like "Configuration:getDirection")
-        if reviewed_function.function_map.contains_key(next_function) {
-            let filepath = reviewed_function.function_map.get(next_function).unwrap();
-            println!("Found exact matching key: {}", next_function);
+        // Create the composite key using the filepath and function name
+        let composite_key = format!("{}:{}", next_filepath, next_function);
+        println!("Looking for composite key: {}", composite_key);
+        
+        // Try exact match with composite key
+        if reviewed_function.function_map.contains_key(&composite_key) {
+            let filepath = reviewed_function.function_map.get(&composite_key).unwrap();
+            println!("Found exact matching composite key: {}", composite_key);
             
             // Clone the HashMap and remove the found function
             let mut updated_map = reviewed_function.function_map.clone();
-            updated_map.remove(next_function);
+            updated_map.remove(&composite_key);
             
-            trace!("Found next function: {} at {}", next_function, filepath);
-            println!("Found next function: {} at {}", next_function, filepath);
+            trace!("Found next function: {} at {}", composite_key, filepath);
+            println!("Found next function: {} at {}", composite_key, filepath);
             
             // Create the LoopSignal with the necessary information
             let signal = LoopSignal {
@@ -102,12 +107,10 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
             return Some(signal);
         }
         
-        // If no exact match, try the old way (for cases like "getPosition")
+        // If no exact match, search through all keys for a partial match
         for (key, filepath) in reviewed_function.function_map.iter() {
             println!("Checking key: {}", key);
-            // Split the key to get the class and function parts
-            let key_parts: Vec<&str> = key.split(':').collect();
-            if key_parts.len() == 2 && key_parts[1] == next_function {
+            if key.ends_with(&format!(":{}", next_function)) {
                 println!("Found matching key: {}", key);
                 // Clone the HashMap and remove the found function
                 let mut updated_map = reviewed_function.function_map.clone();
@@ -118,7 +121,7 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
                 
                 // Create the LoopSignal with the necessary information
                 let signal = LoopSignal {
-                    key: key.to_string(),
+                    key: next_function.to_string(),
                     filepath: filepath.clone(),
                     remaining_functions: updated_map,
                 };
@@ -134,14 +137,14 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
         println!("Review process complete (flag = 0)");
     }
     
-    // If we reach here, we can still return a LoopSignal with an empty remaining_functions
+    // If we reach here, return a LoopSignal with an empty remaining_functions
     let signal = LoopSignal {
         key: String::from(""),
         filepath: String::from(""),
-        remaining_functions: HashMap::new(), // Allow empty map to indicate no more functions
+        remaining_functions: HashMap::new(),
     };
     println!("Returning LoopSignal with no remaining functions");
-    return Some(signal);
+    Some(signal)
 }
 
 pub async fn run(context: SteadyContext
@@ -160,6 +163,7 @@ pub async fn run(context: SteadyContext
 
 async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<ReviewedFunction>,loop_feedback_tx: SteadyTx<LoopSignal>,archived_tx: SteadyTx<ArchivedFunction>, state: SteadyState<ArchiveInternalState>
  ) -> Result<(),Box<dyn Error>> {
+    println!("Archive is fired up. ");
 
     let mut state_guard = steady_state(&state, || ArchiveInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
@@ -187,7 +191,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                     println!("archive - scraper \n{:#?}", &loop_signal);
                     match cmd.try_send(&mut loop_feedback_tx, loop_signal) {
                         Ok(()) => {
-                            trace!("Successfully sent next function signal");
+                            println!("Successfully sent next function signal. FROM ARCHIVE ACTOR TO FUNCTION SCRAPER");
                             println!("SENT loop_signal TO SCRAPER")
                         },
                         Err(e) => {
@@ -220,9 +224,12 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                     review_message: reviewed.review_message,
                 };
 
+                let check_flag = archived.clone();
+
                 match cmd.try_send(&mut archived_tx, archived) {
                     Ok(()) => {
                         trace!("Successfully archived function");
+                        print!("{:#?}", check_flag);
                     },
                     Err(e) => {
                         error!("Failed to send archived function: {:?}", e);

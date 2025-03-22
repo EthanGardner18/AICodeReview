@@ -1,4 +1,5 @@
 
+
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -6,10 +7,15 @@ use std::time::Duration;
 use steady_state::*;
 use crate::Args;
 use std::error::Error;
+use std::io;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct FileData {
-   _dummy: u8 //TODO:  remove dummy and put your channel message fields here
+    pub path: String,
+    pub content: String,
+    pub lastFile: String,
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -30,38 +36,120 @@ pub async fn run(context: SteadyContext
   internal_behavior(cmd, file_data_tx, state).await
 }
 
-async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_tx: SteadyTx<FileData>, state: SteadyState<ReadfileInternalState>
- ) -> Result<(),Box<dyn Error>> {
+fn scan_directory_for_files(path: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut found_files = Vec::new();
+    if path.is_dir() {
+        // Read the directory entries
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() {
+                    // Recursively scan the subdirectory
+                    found_files.extend(scan_directory_for_files(&entry_path, extensions));
+                } else if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
+                    // Check if the file extension matches one of the desired ones
+                    if extensions.contains(&ext) {
+                        found_files.push(entry_path);
+                    }
+                }
+            }
+        } else {
+            println!("Failed to read directory '{}'", path.display());
+        }
+    }
+    found_files
+}
 
+pub fn read_file_with_line_numbers(path: &Path) -> Option<String> {
+    if let Ok(contents) = fs::read_to_string(path) {
+        let numbered_content = contents
+            .lines()
+            .enumerate()
+            .map(|(i, line)| format!("{}: {}", i + 1, line))
+            .collect::<Vec<String>>()
+            .join("\n");
+        Some(numbered_content)
+    } else {
+        eprintln!("Failed to read file: {}", path.display());
+        None
+    }
+}
+
+async fn internal_behavior<C: SteadyCommander>(
+    mut cmd: C,
+    file_data_tx: SteadyTx<FileData>,
+    state: SteadyState<ReadfileInternalState>,
+) -> Result<(), Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || ReadfileInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
+        // Lock the write channel outside the loop
+        let mut file_data_tx = file_data_tx.lock().await;
 
-   //every read and write channel must be locked for this instance use, this is outside before the loop
-   let mut file_data_tx = file_data_tx.lock().await;
+        // ✅ Ask for user input **before** the loop
+        let mut input_path = String::new();
+        println!("Enter the file path:");
+        io::stdin().read_line(&mut input_path).expect("Failed to read line");
 
-   //this is the main loop of the actor, will run until shutdown is requested.
-   //the closure is called upon shutdown to determine if we need to postpone the shutdown
-   while cmd.is_running(&mut ||file_data_tx.mark_closed()) {
+        // Trim to remove any trailing newline
+        let input_path = input_path.trim().to_string();
+        let input_dir = PathBuf::from(&input_path);
 
-     // our loop avoids spinning by using await here on multiple criteria. clean is false if await
-     // returned early due to a shutdown request or closed channel.
-         let clean = await_for_all!(cmd.wait_periodic(Duration::from_millis(1000))    );
+        // Define allowed file extensions
+        let coding_extensions = [
+            "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java",
+            "go", "html", "htm", "css", "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm",
+            "r", "md",
+        ];
 
-  
-        //TODO:  here is an example writing to file_data_tx
-        match cmd.try_send(&mut file_data_tx, FileData::default() ) {
-            Ok(()) => {
-            },
-            Err(msg) => { //in the above await we should have confirmed space is available
-                trace!("error sending: {:?}", msg)
-            },
+        // Scan directory for files once
+        let found_files = scan_directory_for_files(&input_dir, &coding_extensions);
+        let total_files = found_files.len();
+        let mut processed_files = 0;
+
+        // ✅ Main loop (runs indefinitely or until shutdown)
+        while cmd.is_running(&mut || file_data_tx.mark_closed()) {
+            // Prevent spinning by awaiting a periodic check
+            let clean = await_for_all!(cmd.wait_periodic(Duration::from_millis(1000)));
+
+            // Process each file in the directory
+            for file_path in &found_files {
+                processed_files += 1;
+                let is_last_file = processed_files == total_files;
+
+                let file_content = read_file_with_line_numbers(file_path).unwrap_or_else(|| {
+                    eprintln!("Failed to read file: {}", file_path.display());
+                    String::new()
+                });
+
+                let data = FileData {
+                    path: file_path.display().to_string(),
+                    content: file_content,
+                    lastFile: if is_last_file { "T".to_string() } else { "F".to_string() },
+                };
+
+                match cmd.try_send(&mut file_data_tx, data) {
+                    Ok(()) => {
+                        println!(
+                            "Message sent successfully {}",
+                            if is_last_file { "(last file)" } else { "" }
+                        );
+
+                        // ✅ If it's the last file, mark the channel as closed
+                        if is_last_file {
+                            file_data_tx.mark_closed();
+                            println!("file_data_tx marked as closed.");
+                            println!("All files processed. Exiting actor.");
+                            return Ok(()); // Gracefully exit the function
+                        }
+                    }
+                    Err(msg) => trace!("Error sending: {:?}", msg),
+                }
+            }
         }
-  
-
-      }
     }
     Ok(())
 }
+
 
 
 #[cfg(test)]

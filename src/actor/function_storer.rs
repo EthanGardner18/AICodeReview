@@ -9,7 +9,7 @@ use std::error::Error;
 use crate::actor::archive::ArchivedFunction;
 
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 
 
@@ -20,29 +20,78 @@ pub(crate) struct FunctionstorerInternalState {
 
 
 
-async fn store_function(function: &ArchivedFunction) -> Result<(), Box<dyn Error>> {
-    let output_path = "stored_functions.txt";
+// async fn store_function(function: &ArchivedFunction) -> Result<(), Box<dyn Error>> {
+//     let output_path = "stored_functions.txt";
     
-    // Open file in append mode, create if doesn't exist
+//     // Open file in append mode, create if doesn't exist
+//     let mut file = OpenOptions::new()
+//         .create(true)
+//         .append(true)
+//         .open(output_path)?;
+
+//     //Format: {"function_name:namespace", "filepath", start_line, end_line}
+//     let entry = format!(
+//         "{{\"{}:{}\", \"{}\", {}, {}}}\n",
+//         function.name,
+//         function.namespace,
+//         function.filepath,
+//         function.start_line,
+//         function.end_line
+//     );
+
+//     file.write_all(entry.as_bytes())?;
+    
+//     Ok(())
+// }
+
+pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
+    // Parse the review message to ignore anything after the first `, 1` or `, 0`
+    let review_message = archived_fn.review_message.split_once(", 1")
+        .or_else(|| archived_fn.review_message.split_once(", 0"))
+        .map_or(
+            archived_fn.review_message.as_str(), // Use a string slice here to avoid ownership issues
+            |(review, _)| review,
+        );
+
+    // Remove `{function_name,` from the start of the review message without moving the original string.
+    let review_message_cleaned = if let Some(stripped) = review_message.strip_prefix("{") {
+        stripped.strip_suffix(",").unwrap_or(stripped).to_string()  // Strip the prefix and suffix
+    } else {
+        review_message.to_string()  // Just clone if there's no prefix
+    };
+
+    // Return the formatted markdown string
+    format!(
+        "## Function: `{}`\n\n\
+        | **Aspect**        | **Details** |\n\
+        |-------------------|------------|\n\
+        | **Description**   | {} |\n\
+        | **File Location** | {} (Lines {}-{}) |\n",
+        archived_fn.name,
+        review_message_cleaned,
+        archived_fn.filepath,
+        archived_fn.start_line,
+        archived_fn.end_line
+    )
+}
+
+
+async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
+    let markdown = generate_markdown(archived_fn);
+
+    // Open the file in append mode
     let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(output_path)?;
+        .create(true)  // Create the file if it doesn't exist
+        .append(true)  // Open the file in append mode
+        .open("reviewed_information.md")?;
 
-    //Format: {"function_name:namespace", "filepath", start_line, end_line}
-    let entry = format!(
-        "{{\"{}:{}\", \"{}\", {}, {}}}\n",
-        function.name,
-        function.namespace,
-        function.filepath,
-        function.start_line,
-        function.end_line
-    );
+    file.write_all(markdown.as_bytes())?;
+    file.write_all(b"\n")?;  // Ensure a newline is added after each entry.
 
-    file.write_all(entry.as_bytes())?;
-    
     Ok(())
 }
+
+
 
 #[cfg(not(test))]
 pub async fn run(context: SteadyContext
