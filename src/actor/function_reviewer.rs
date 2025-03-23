@@ -112,10 +112,10 @@ pub async fn review_function(
     This iterative review structure is designed to leverage your ability to maintain short-term memory context effectively. \
     By focusing on one function at a time and assessing remaining ones, your responses provide a more focused and coherent review process than bulk analysis.\n\n\
     Each of your responses must follow the **strict structured format** described below. \
-    You must begin your review with one of the following severity levels, marked in **markdown format**:\n\
-    - **Low** (🟢): Minor, mostly stylistic suggestions; function is safe to ship.\n\
-    - **Moderate** (🟡): Functionally fine but has maintainability or clarity concerns.\n\
-    - **Severe** (🔴): Critical issues affecting performance, logic, or stability.\n\n\
+    You must begin your review with a numbered severity level (1 to 3):\n\
+    - 1: Minor issues or stylistic suggestions; function is safe to ship.\n\
+    - 2: Functionally fine but has maintainability or clarity concerns.\n\
+    - 3: Critical issues affecting performance, logic, or stability.\n\n\
     === CURRENT FUNCTION FOR REVIEW ===\n\
     Below is the function you previously marked as important, along with its file path:\n\n{}\n{}\n\n\
     === LIST OF REMAINING FUNCTIONS ===\n\
@@ -125,17 +125,18 @@ pub async fn review_function(
     {}\n\n\
     === RESPONSE FORMAT (STRICT) ===\n\
     Your response **must** follow this exact structure:\n\
-    {{functionName, functionReview, number, nextFunctionName, nextFunctionPath}}\n\n\
+    {{functionName, severity, functionReview, number, nextFunctionName, nextFunctionPath}}\n\n\
     Where:\n\
     - `functionName`: Name of the function you're reviewing now.\n\
+    - `severity`: A numeric severity level (1 = low, 2 = moderate, 3 = high).\n\
     - `functionReview`: A concise, professional review in 200 words or fewer, with no line breaks.\n\
     - `number`: 1 if you want to continue reviewing more functions, 0 if you’re satisfied with your assessment.\n\
     - `nextFunctionName`: Name of the next function you want to review (only if number is 1).\n\
     - `nextFunctionPath`: Full path to the next function file (only if number is 1).\n\n\
     Example response:\n\
-    {{processFile, This function handles file processing with good error handling, 1, validateInput, src/utils.rs}}\n\n\
+    {{processFile, 1, This function handles file processing with good error handling, 1, validateInput, src/utils.rs}}\n\n\
     CRITICAL RESPONSE FORMAT REQUIREMENTS:\n\
-    1. Respond ONLY with this exact format: {{function_name, review_text, number, next_function_name, path/to/file}}\n\
+    1. Respond ONLY with this exact format: {{function_name, severity, review_text, number, next_function_name, path/to/file}}\n\
     2. Do NOT use any markdown, quotes, backticks, or any other formatting in the response block itself\n\
     3. Do NOT add any additional text before or after the response\n\
     4. Do NOT include any line breaks in the review text\n\
