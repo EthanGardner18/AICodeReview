@@ -12,6 +12,8 @@ use regex::Regex;
 use std::fs::File;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
+use std::fs::OpenOptions;
+use std::io::Write;
 
 
 
@@ -47,6 +49,20 @@ impl Default for CodeFunction {
 pub(crate) struct FunctionscraperInternalState {
 }
 
+fn write_hashmap_to_file(hashmap: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("test_hashmap.txt")?;
+
+    for (key, value) in hashmap.iter() {
+        writeln!(file, "Key: {} | Value: {}", key, value)?;
+    }
+
+    println!("📝 Wrote HashMap contents to test_hashmap.txt");
+    Ok(())
+}
 
 fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let file = File::open(file_path)?;
@@ -75,6 +91,11 @@ fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, 
         }
     }
     
+    // Write the populated HashMap to file
+    if let Err(e) = write_hashmap_to_file(&function_details) {
+        error!("❌ Failed to write HashMap to file: {:?}", e);
+    }
+    
     Ok(function_details)
 }
 
@@ -94,14 +115,14 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     println!("Extracting function from signal: {:?}", signal);
     
     let function_name = signal.key.clone();
+    let expected_filepath = signal.filepath.clone();
     
-    // Changed from "test-1.txt" to "test.txt" to use the same file
     let file = File::open("test.txt")?;
     let reader = BufReader::new(file);
     
     let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
 
-    println!("🔍 Looking for function in test.txt with name: {}", function_name);
+    println!("🔍 Looking for function '{}' in file '{}'", function_name, expected_filepath);
 
     for line in reader.lines() {
         let line = line?;
@@ -113,10 +134,10 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
             let start_line: usize = captures[3].parse()?;
             let end_line: usize = captures[4].parse()?;
 
-            // Check if the function name matches exactly
-            if captured_name == function_name {
-                println!("✅ Found matching function. Reading content from {} (lines {}-{})", 
-                    filepath, start_line, end_line);
+            // Check if both function name and filepath match
+            if captured_name == function_name && filepath == expected_filepath {
+                println!("✅ Found matching function '{}' in file '{}' (lines {}-{})", 
+                    captured_name, filepath, start_line, end_line);
 
                 // Read the actual function content from the file
                 let content = read_function_content(&filepath, start_line, end_line)?;
@@ -130,11 +151,15 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
                     content,
                     function_map: signal.remaining_functions.clone(),
                 });
+            } else {
+                println!("❌ No match: Expected '{}' in '{}', found '{}' in '{}'",
+                    function_name, expected_filepath, captured_name, filepath);
             }
         }
     }
 
-    Err(format!("❌ Function '{}' not found in file", function_name).into())
+    Err(format!("❌ Function '{}' not found in file '{}' at path '{}'", 
+        function_name, "test.txt", expected_filepath).into())
 }
 
 pub async fn run(context: SteadyContext

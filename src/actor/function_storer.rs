@@ -1,4 +1,3 @@
-
 #[allow(unused_imports)]
 use log::*;
 #[allow(unused_imports)]
@@ -49,15 +48,32 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     let review_message = archived_fn.review_message.split_once(", 1")
         .or_else(|| archived_fn.review_message.split_once(", 0"))
         .map_or(
-            archived_fn.review_message.as_str(), // Use a string slice here to avoid ownership issues
+            archived_fn.review_message.as_str(),
             |(review, _)| review,
         );
 
-    // Remove `{function_name,` from the start of the review message without moving the original string.
+    // Clean up the review message:
+    // 1. Remove the opening brace and function name
+    // 2. Remove any filepath:function_name format if present
     let review_message_cleaned = if let Some(stripped) = review_message.strip_prefix("{") {
-        stripped.strip_suffix(",").unwrap_or(stripped).to_string()  // Strip the prefix and suffix
+        // First remove the opening brace
+        let without_brace = stripped.strip_suffix(",").unwrap_or(stripped);
+        
+        // Then remove the function name part, which might be in filepath:function_name format
+        if let Some(pos) = without_brace.find(", ") {
+            without_brace[pos + 2..].to_string()
+        } else {
+            without_brace.to_string()
+        }
     } else {
-        review_message.to_string()  // Just clone if there's no prefix
+        review_message.to_string()
+    };
+
+    // Extract function name from composite key if present
+    let display_name = if archived_fn.name.contains(':') {
+        archived_fn.name.split(':').nth(1).unwrap_or(&archived_fn.name)
+    } else {
+        &archived_fn.name
     };
 
     // Return the formatted markdown string
@@ -66,12 +82,14 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         | **Aspect**        | **Details** |\n\
         |-------------------|------------|\n\
         | **Description**   | {} |\n\
-        | **File Location** | {} (Lines {}-{}) |\n",
-        archived_fn.name,
-        review_message_cleaned,
+        | **File Location** | {} (Lines {}-{}) |\n\
+        | **Namespace**     | {} |\n",
+        display_name,
+        review_message_cleaned.trim(),
         archived_fn.filepath,
         archived_fn.start_line,
-        archived_fn.end_line
+        archived_fn.end_line,
+        archived_fn.namespace
     )
 }
 
