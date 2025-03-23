@@ -44,29 +44,30 @@ pub(crate) struct FunctionstorerInternalState {
 // }
 
 pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
-    // Parse the review message to get all components
-    let review_parts: Vec<&str> = archived_fn.review_message
-        .trim_matches('{')
-        .trim_matches('}')
-        .split(", ")
-        .collect();
-
-    // Extract severity and review message
-    let (severity, severity_color, review_message_cleaned) = if review_parts.len() >= 3 {
-        let severity = review_parts[1].to_string(); // Get severity
-        let review = review_parts[2].to_string();   // Get review message
-        
-        // Determine color based on severity
-        let color = match severity.trim() {
-            "1" => "<span style=\"color:green;\">Low Severity</span>",
-            "2" => "<span style=\"color:yellow;\">Medium Severity</span>",
-            "3" => "<span style=\"color:red;\">High Severity</span>",
-            _ => "<span style=\"color:gray;\">Unknown Severity</span>",
-        };
-        
-        (severity, color.to_string(), review)
+    // Parse the review message
+    let review_msg = archived_fn.review_message.trim_matches('{').trim_matches('}');
+    
+    // Find the first part (function name) and severity
+    let mut parts = review_msg.splitn(3, ", ");
+    let function_name = parts.next().unwrap_or("Unknown");
+    let severity = parts.next().unwrap_or("Unknown");
+    
+    // Get the rest of the message up to the last ", 1," or ", 0,"
+    let remaining = parts.next().unwrap_or("");
+    let review_text = if let Some(pos) = remaining.rfind(", 1,") {
+        &remaining[..pos]
+    } else if let Some(pos) = remaining.rfind(", 0,") {
+        &remaining[..pos]
     } else {
-        ("Unknown".to_string(), "<span style=\"color:gray;\">Unknown Severity</span>".to_string(), archived_fn.review_message.clone())
+        remaining
+    };
+
+    // Determine color based on severity
+    let severity_color = match severity.trim() {
+        "1" => "<span style=\"color:green;\">Low Severity</span>",
+        "2" => "<span style=\"color:yellow;\">Medium Severity</span>",
+        "3" => "<span style=\"color:red;\">High Severity</span>",
+        _ => "<span style=\"color:gray;\">Unknown Severity</span>",
     };
 
     // Extract function name from composite key if present
@@ -76,7 +77,7 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         &archived_fn.name
     };
 
-    // Return the formatted markdown string with colored severity
+    // Return the formatted markdown string
     format!(
         "## Function: `{}`\n\n\
         | **Aspect**        | **Details** |\n\
@@ -87,7 +88,7 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         | **Namespace**     | {} |\n",
         display_name,
         severity_color,
-        review_message_cleaned.trim(),
+        review_text.trim(),
         archived_fn.filepath,
         archived_fn.start_line,
         archived_fn.end_line,

@@ -57,18 +57,26 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     // Extract the parts using a more robust approach
     let review_msg = reviewed_function.review_message.trim_matches('{').trim_matches('}');
     
-    // Split by ", " but keep track of the last three elements
-    let parts: Vec<&str> = review_msg.split(", ").collect();
-    if parts.len() < 4 {
-        println!("Not enough parts found in review message");
+    // Find the last occurrence of ", 1," or ", 0," to split the review properly
+    let (review_part, remaining) = if let Some(pos) = review_msg.rfind(", 1,") {
+        (&review_msg[..pos], &review_msg[pos + 2..])
+    } else if let Some(pos) = review_msg.rfind(", 0,") {
+        (&review_msg[..pos], &review_msg[pos + 2..])
+    } else {
+        println!("Could not find continue flag in review message");
+        return None;
+    };
+    
+    // Split the remaining parts (after the review text)
+    let remaining_parts: Vec<&str> = remaining.split(", ").collect();
+    if remaining_parts.len() < 3 {
+        println!("Not enough parts found in remaining message");
         return None;
     }
     
-    // Get the last three elements
-    let len = parts.len();
-    let continue_flag = parts[len - 3];  // Should be "1" or "0"
-    let next_function = parts[len - 2];  // Next function name
-    let next_filepath = parts[len - 1];  // File path from GPT response
+    let continue_flag = remaining_parts[0];  // Should be "1" or "0"
+    let next_function = remaining_parts[1];  // Next function name
+    let next_filepath = remaining_parts[2];  // File path
     
     // Clean up the continue flag - ensure we get just the number
     let continue_flag = continue_flag.trim().chars().filter(|c| c.is_digit(10)).collect::<String>();

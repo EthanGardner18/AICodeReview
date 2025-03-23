@@ -1,297 +1,117 @@
-## Function: `run`
+## Function: `handle_client`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally well-structured and serves its purpose of initiating the monitoring process. However |
-| **File Location** | src/actor/archive.rs (Lines 150-162) |
+| **Description**   | The function effectively handles TCP stream communication with basic error handling. However, it lacks proper logging for errors and does not handle potential resource leaks, such as ensuring the stream is closed properly. Additionally, the infinite loop could lead to high CPU usage if not managed correctly. Consider implementing a timeout or a mechanism to break the loop gracefully. Overall, while functional, improvements in clarity and maintainability are needed, especially regarding error handling and resource management |
+| **File Location** | /Misc/projects/ai-code-review/test/chat_server.rs (Lines 6-23) |
 | **Namespace**     | global |
 
-## Function: `process_review_and_update_map`
+## Function: `main`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function processes a review message and updates a function map |
-| **File Location** | src/actor/archive.rs (Lines 53-148) |
+| **Description**   | The function sets up a TCP listener and spawns a new thread for each incoming connection, which is a common pattern. However, it lacks error handling for the thread creation and does not limit the number of concurrent threads, which could lead to resource exhaustion under heavy load. Additionally, the use of `unwrap()` on the listener binding could cause a panic if the address is already in use. Consider implementing proper error handling and possibly using a thread pool to manage connections more efficiently. Overall, while functional, the maintainability and clarity could be improved |
+| **File Location** | /Misc/projects/ai-code-review/test/chat_server.rs (Lines 25-38) |
 | **Namespace**     |  |
 
-## Function: `scan_directory_for_files`
+## Function: `handle_client`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively scans directories for files with specified extensions |
-| **File Location** | src/actor/read_file.rs (Lines 39-61) |
+| **Description**   | The function effectively handles TCP stream reading and writing, but lacks proper error handling for the write operation, which could lead to silent failures. Additionally, the infinite loop may cause resource exhaustion if not managed properly. Consider implementing a mechanism to limit the number of iterations or handle specific conditions to exit the loop gracefully. The inline error messages are helpful but could be enhanced with more context. Overall, while functional, the maintainability and clarity could be improved, especially regarding error handling and loop management |
+| **File Location** | /Misc/projects/ai-code-review/test/chat_server.rs (Lines 6-23) |
 | **Namespace**     |  |
 
-## Function: `run`
+## Function: `fetchData`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively sets up the context and initiates the internal behavior loop |
-| **File Location** | src/actor/function_reviewer.rs (Lines 168-280) |
+| **Description**   | The function fetchData effectively retrieves data from a given URL and handles errors appropriately. However, it lacks a return statement, which could be useful for further processing of the fetched data. Additionally, logging the data directly to the console may not be ideal for production code; consider returning the data or using a more structured logging approach. The error handling is basic and could be improved by providing more context or handling specific error types. Overall, while the function works as intended, enhancing its clarity and maintainability would be beneficial |
+| **File Location** | /Misc/projects/ai-code-review/test/async_fetch_data.js (Lines 4-12) |
 | **Namespace**     |  |
 
-## Function: `internal_behavior`
+## Function: `get_headings`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function implements an asynchronous behavior for reviewing functions but has several maintainability concerns. The use of inline comments is helpful |
-| **File Location** | src/actor/function_reviewer.rs (Lines 181-279) |
+| **Description**   | The function retrieves headings from a webpage but lacks error handling for network issues or invalid URLs. Additionally, printing directly within the function reduces its reusability; returning the headings as a list would be more appropriate. Consider adding type hints for clarity and improving maintainability. Overall, the function serves its purpose but could benefit from these enhancements |
+| **File Location** | /Misc/projects/ai-code-review/test/web_scraper.py (Lines 5-12) |
 | **Namespace**     |  |
 
-## Function: `send_prompt_to_chatgpt`
+## Function: `main`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively sends a prompt to the ChatGPT API and handles responses |
-| **File Location** | src/actor/function_reviewer.rs (Lines 47-88) |
+| **Description**   | The function effectively initiates concurrent fetching of URLs using goroutines and a WaitGroup, but lacks error handling for the fetchURL function. Additionally, the URLs are hardcoded, which may limit flexibility. Consider externalizing the URL list or passing it as an argument for better maintainability. Overall, the function is clear but could benefit from improved error management and configurability |
+| **File Location** | /Misc/projects/ai-code-review/test/concurrent_fetch.go (Lines 21-35) |
 | **Namespace**     |  |
 
-## Function: `write_hashmap_to_file`
+## Function: `fetchURL`
+
+| **Aspect**        | **Details** |
+|-------------------|------------|
+| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
+| **Description**   | The function fetchURL performs its intended task of fetching a URL and handling errors, but it lacks proper error handling for the response body. If http.Get succeeds but the response body cannot be closed, it may lead to resource leaks. Additionally, using fmt.Println for error logging is not ideal for production code; consider using a logging library for better control over log levels and outputs. The function could also benefit from returning an error instead of just printing it, allowing the caller to handle it appropriately. Overall, while the function works, improving error handling and logging would enhance maintainability and clarity |
+| **File Location** | /Misc/projects/ai-code-review/test/concurrent_fetch.go (Lines 10-19) |
+| **Namespace**     |  |
+
+## Function: `searchFiles`
+
+| **Aspect**        | **Details** |
+|-------------------|------------|
+| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
+| **Description**   | The function effectively searches for a keyword in files within a specified directory, but it lacks error handling for potential I/O exceptions when reading files. Additionally, using println for output may not be suitable for all applications; consider using a logging framework for better control. The function could also benefit from returning a list of found file paths instead of printing them directly, enhancing its reusability. Overall, while functional, improvements in maintainability and clarity are needed |
+| **File Location** | /Misc/projects/ai-code-review/test/file_search.kt (Lines 4-15) |
+| **Namespace**     |  |
+
+## Function: `main`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:green;">Low Severity</span> |
-| **Description**   | This function effectively writes the contents of a HashMap to a file with appropriate error handling. The use of OpenOptions is suitable for the intended file operations. The inline comments are clear |
-| **File Location** | src/actor/function_scraper.rs (Lines 52-65) |
+| **Description**   | The main function effectively initializes parameters and calls the searchFiles function with appropriate arguments. It is clear and concise, adhering to good coding practices. However, consider adding error handling for cases where the directory might not exist or the searchFiles function fails. Overall, it is safe to ship |
+| **File Location** | /Misc/projects/ai-code-review/test/file_search.kt (Lines 17-21) |
 | **Namespace**     |  |
 
-## Function: `run`
+## Function: `quicksort`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally well-structured and performs its intended purpose of managing context and monitoring channels. However |
-| **File Location** | src/actor/function_scraper.rs (Lines 165-177) |
+| **Description**   | The quicksort function implements the sorting algorithm correctly but has maintainability concerns due to the use of remove-if-not, which creates intermediate lists and can lead to inefficiencies. The use of append for concatenation can also be costly in terms of performance, especially for large lists. Consider using a more efficient method for list concatenation or in-place sorting to improve performance. Additionally, the function lacks documentation, which would help clarify its purpose and usage. Overall, while the logic is sound, the implementation could be optimized for better performance and clarity |
+| **File Location** | /Misc/projects/ai-code-review/test/quicksort.lisp (Lines 2-8) |
 | **Namespace**     |  |
 
-## Function: `internal_behavior`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively handles file reading and user input but has maintainability concerns |
-| **File Location** | src/actor/read_file.rs (Lines 78-150) |
-| **Namespace**     |  |
-
-## Function: `run`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally functional but lacks clarity in its purpose and the use of the context and command variables could be better documented. The inline comments provide some context but could be expanded to clarify the intent behind the function's operations. Additionally |
-| **File Location** | src/actor/read_file.rs (Lines 27-37) |
-| **Namespace**     |  |
-
-## Function: `internal_behavior`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function implements an asynchronous behavior for processing commands and managing state effectively. However |
-| **File Location** | src/actor/function_storer.rs (Lines 129-165) |
-| **Namespace**     |  |
-
-## Function: `run`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally well-structured and serves its purpose of initiating the monitoring process. However |
-| **File Location** | src/actor/archive.rs (Lines 150-162) |
-| **Namespace**     |  |
-
-## Function: `internal_behavior`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | This function implements an asynchronous actor pattern but suffers from maintainability issues due to complex nested logic and potential error handling gaps. The use of blocking calls like task::block_on within an async context can lead to performance bottlenecks. Additionally |
-| **File Location** | src/actor/parse_function.rs (Lines 191-306) |
-| **Namespace**     |  |
-
-## Function: `chatgpt_firstfunction`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively sets up an API call to OpenAI's service |
-| **File Location** | src/actor/parse_function.rs (Lines 43-106) |
-| **Namespace**     |  |
-
-## Function: `test_simple_process`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function sets up a testing environment for a graph-based process but lacks clarity in its purpose and has a TODO comment indicating incomplete functionality. The use of `await` suggests asynchronous behavior |
-| **File Location** | src/actor/read_file.rs (Lines 177-193) |
-| **Namespace**     |  |
-
-## Function: `store_function`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively appends markdown content to a file |
-| **File Location** | src/actor/function_storer.rs (Lines 99-111) |
-| **Namespace**     |  |
-
-## Function: `generate_markdown`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function generates a markdown string from an archived function's review message |
-| **File Location** | src/actor/function_storer.rs (Lines 46-96) |
-| **Namespace**     |  |
-
-## Function: `test_simple_process`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function sets up a testing environment for a graph-based process but lacks clarity in its purpose and has TODO comments indicating incomplete implementation. The use of `await` suggests asynchronous behavior |
-| **File Location** | src/actor/parse_function.rs (Lines 320-342) |
-| **Namespace**     |  |
-
-## Function: `run`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally well-structured and serves its purpose of managing context and monitoring channels. However |
-| **File Location** | src/actor/parse_function.rs (Lines 30-41) |
-| **Namespace**     |  |
-
-## Function: `call_chatgpt_api`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively handles API calls and error management |
-| **File Location** | src/actor/parse_function.rs (Lines 108-169) |
-| **Namespace**     |  |
-
-## Function: `extract_function_from_signal`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively extracts a function from a signal but has some maintainability concerns. The use of hardcoded file paths and regex patterns can lead to issues if the file structure changes. Additionally |
-| **File Location** | src/actor/function_scraper.rs (Lines 114-162) |
-| **Namespace**     |  |
-
-## Function: `read_function_content`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function reads a specified range of lines from a file and returns them as a single string. While it handles file opening and reading well |
-| **File Location** | src/actor/function_scraper.rs (Lines 102-111) |
-| **Namespace**     |  |
-
-## Function: `append_to_file`
+## Function: `main`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:green;">Low Severity</span> |
-| **Description**   | This function effectively appends content to a file with proper error handling and input sanitization. The use of trimming and conditional writing ensures that only meaningful lines are written |
-| **File Location** | src/actor/parse_function.rs (Lines 172-188) |
+| **Description**   | The main function is straightforward and effectively initializes the filename and calls the read_file function. It adheres to standard practices and is safe to ship. However, consider adding error handling for the read_file call to enhance robustness. Overall, it serves its purpose well, maintaining clarity and simplicity |
+| **File Location** | /Misc/projects/ai-code-review/test/file_operation.c (Lines 20-24) |
 | **Namespace**     |  |
 
-## Function: `test_simple_process`
+## Function: `read_file`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function sets up a testing environment for a graph-based system but lacks clarity in its purpose and has several TODO comments indicating incomplete tests. The use of `await` suggests asynchronous behavior |
-| **File Location** | src/actor/archive.rs (Lines 294-322) |
+| **Description**   | The function reads a file and outputs its content, but it lacks proper error handling for the `fgetc` function and does not check if the file is empty. Additionally, using `exit(1)` is not ideal for error handling in a library context; it would be better to return an error code or use exceptions. The function could also benefit from more descriptive comments regarding its purpose and usage. Overall, while it functions correctly, improvements in maintainability and clarity are needed |
+| **File Location** | /Misc/projects/ai-code-review/test/file_operation.c (Lines 5-18) |
 | **Namespace**     |  |
 
-## Function: `write_review_to_file`
+## Function: `add_matrices`
 
 | **Aspect**        | **Details** |
 |-------------------|------------|
 | **Severity**      | <span style="color:green;">Low Severity</span> |
-| **Description**   | This function effectively handles file writing with appropriate error handling and uses append mode correctly. The use of `writeln!` ensures that content is written with a newline |
-| **File Location** | src/actor/archive.rs (Lines 38-51) |
-| **Namespace**     |  |
-
-## Function: `internal_behavior`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function implements an asynchronous loop for processing reviews and archiving functions |
-| **File Location** | src/actor/archive.rs (Lines 164-283) |
-| **Namespace**     |  |
-
-## Function: `review_function`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | This function effectively constructs a prompt for code review but relies heavily on external input and lacks error handling for the response. The use of async is appropriate |
-| **File Location** | src/actor/function_reviewer.rs (Lines 91-164) |
-| **Namespace**     |  |
-
-## Function: `read_file_with_line_numbers`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | This function reads a file and returns its contents with line numbers. While it handles errors gracefully |
-| **File Location** | src/actor/read_file.rs (Lines 63-76) |
-| **Namespace**     |  |
-
-## Function: `test_simple_process`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | This function sets up a testing environment using a graph structure |
-| **File Location** | src/actor/function_reviewer.rs (Lines 291-313) |
-| **Namespace**     |  |
-
-## Function: `internal_behavior`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | This function has a complex structure with nested loops and multiple asynchronous operations |
-| **File Location** | src/actor/function_scraper.rs (Lines 179-273) |
-| **Namespace**     |  |
-
-## Function: `extract_function_details`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function effectively extracts function details from a file using regex and handles errors well. However |
-| **File Location** | src/actor/function_scraper.rs (Lines 67-100) |
-| **Namespace**     |  |
-
-## Function: `test_simple_process`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function sets up a testing environment for a graph-based system but lacks clarity in the TODO comment regarding the test vector's content. The use of `clone()` on `state` and `archived_rx` may introduce unnecessary overhead if these types are not lightweight. Additionally |
-| **File Location** | src/actor/function_storer.rs (Lines 192-208) |
-| **Namespace**     |  |
-
-## Function: `run`
-
-| **Aspect**        | **Details** |
-|-------------------|------------|
-| **Severity**      | <span style="color:yellow;">Medium Severity</span> |
-| **Description**   | The function is generally functional but lacks clarity in its purpose and the use of the `_cli_args` variable |
-| **File Location** | src/actor/function_storer.rs (Lines 117-127) |
+| **Description**   | The function correctly implements matrix addition with clear intent and proper use of Fortran syntax. Variable declarations are appropriate, and the nested loops effectively iterate through the matrix elements. However, consider adding input validation for the dimensions of matrices X and Y to ensure they are compatible for addition. This would enhance robustness. Overall, the function is safe to ship with minor suggestions for improvement |
+| **File Location** | /Misc/projects/ai-code-review/test/matrix_multiply.f90 (Lines 36-46) |
 | **Namespace**     |  |
 

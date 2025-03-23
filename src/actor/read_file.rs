@@ -98,7 +98,7 @@ async fn internal_behavior<C: SteadyCommander>(
         let coding_extensions = [
             "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java",
             "go", "html", "htm", "css", "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm",
-            "r", "md",
+            "r", "md", "pas", "f90", "lisp", "cbl",
         ];
 
         // Scan directory for files once
