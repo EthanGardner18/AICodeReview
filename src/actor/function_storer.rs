@@ -44,29 +44,29 @@ pub(crate) struct FunctionstorerInternalState {
 // }
 
 pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
-    // Parse the review message to ignore anything after the first `, 1` or `, 0`
-    let review_message = archived_fn.review_message.split_once(", 1")
-        .or_else(|| archived_fn.review_message.split_once(", 0"))
-        .map_or(
-            archived_fn.review_message.as_str(),
-            |(review, _)| review,
-        );
+    // Parse the review message to get all components
+    let review_parts: Vec<&str> = archived_fn.review_message
+        .trim_matches('{')
+        .trim_matches('}')
+        .split(", ")
+        .collect();
 
-    // Clean up the review message:
-    // 1. Remove the opening brace and function name
-    // 2. Remove any filepath:function_name format if present
-    let review_message_cleaned = if let Some(stripped) = review_message.strip_prefix("{") {
-        // First remove the opening brace
-        let without_brace = stripped.strip_suffix(",").unwrap_or(stripped);
+    // Extract severity and review message
+    let (severity, severity_color, review_message_cleaned) = if review_parts.len() >= 3 {
+        let severity = review_parts[1].to_string(); // Get severity
+        let review = review_parts[2].to_string();   // Get review message
         
-        // Then remove the function name part, which might be in filepath:function_name format
-        if let Some(pos) = without_brace.find(", ") {
-            without_brace[pos + 2..].to_string()
-        } else {
-            without_brace.to_string()
-        }
+        // Determine color based on severity
+        let color = match severity.trim() {
+            "1" => "<span style=\"color:green;\">Low Severity</span>",
+            "2" => "<span style=\"color:yellow;\">Medium Severity</span>",
+            "3" => "<span style=\"color:red;\">High Severity</span>",
+            _ => "<span style=\"color:gray;\">Unknown Severity</span>",
+        };
+        
+        (severity, color.to_string(), review)
     } else {
-        review_message.to_string()
+        ("Unknown".to_string(), "<span style=\"color:gray;\">Unknown Severity</span>".to_string(), archived_fn.review_message.clone())
     };
 
     // Extract function name from composite key if present
@@ -76,15 +76,17 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         &archived_fn.name
     };
 
-    // Return the formatted markdown string
+    // Return the formatted markdown string with colored severity
     format!(
         "## Function: `{}`\n\n\
         | **Aspect**        | **Details** |\n\
         |-------------------|------------|\n\
+        | **Severity**      | {} |\n\
         | **Description**   | {} |\n\
         | **File Location** | {} (Lines {}-{}) |\n\
         | **Namespace**     | {} |\n",
         display_name,
+        severity_color,
         review_message_cleaned.trim(),
         archived_fn.filepath,
         archived_fn.start_line,
