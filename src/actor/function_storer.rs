@@ -10,6 +10,9 @@ use crate::actor::archive::ArchivedFunction;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
+use std::time::SystemTime;
+use chrono::{DateTime, Local};
+use std::fs;
 
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -42,6 +45,23 @@ pub(crate) struct FunctionstorerInternalState {
     
 //     Ok(())
 // }
+
+
+fn get_file_modified_time(file_path: String) -> Result<String, String> {
+    let path = Path::new(&file_path);
+
+    // Get metadata
+    let metadata = fs::metadata(path).map_err(|e| format!("Failed to get metadata: {}", e))?;
+
+    // Get modified time
+    let modified_time = metadata.modified().map_err(|e| format!("Failed to get modified time: {}", e))?;
+
+    // Convert to chrono DateTime
+    let datetime: DateTime<Local> = modified_time.into();
+
+    // Format as string and return
+    Ok(datetime.format("%Y-%m-%d %H:%M:%S").to_string())
+}
 
 pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     // Parse the review message
@@ -77,6 +97,12 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         &archived_fn.name
     };
 
+    let modified_time = match get_file_modified_time(archived_fn.filepath.clone()) {
+        Ok(time) => time,
+        Err(e) => format!("Error: {}", e),
+    };
+
+
     // Return the formatted markdown string
     format!(
         "## Function: `{}`\n\n\
@@ -85,14 +111,15 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         | **Severity**      | {} |\n\
         | **Description**   | {} |\n\
         | **File Location** | {} (Lines {}-{}) |\n\
-        | **Namespace**     | {} |\n",
+        | **Last Modified**     | {} |\n",
         display_name,
         severity_color,
         review_text.trim(),
         archived_fn.filepath,
         archived_fn.start_line,
         archived_fn.end_line,
-        archived_fn.namespace
+        modified_time
+        
     )
 }
 
