@@ -21,32 +21,6 @@ pub(crate) struct FunctionstorerInternalState {
 }
 
 
-
-// async fn store_function(function: &ArchivedFunction) -> Result<(), Box<dyn Error>> {
-//     let output_path = "stored_functions.txt";
-    
-//     // Open file in append mode, create if doesn't exist
-//     let mut file = OpenOptions::new()
-//         .create(true)
-//         .append(true)
-//         .open(output_path)?;
-
-//     //Format: {"function_name:namespace", "filepath", start_line, end_line}
-//     let entry = format!(
-//         "{{\"{}:{}\", \"{}\", {}, {}}}\n",
-//         function.name,
-//         function.namespace,
-//         function.filepath,
-//         function.start_line,
-//         function.end_line
-//     );
-
-//     file.write_all(entry.as_bytes())?;
-    
-//     Ok(())
-// }
-
-
 fn get_file_modified_time(file_path: String) -> Result<String, String> {
     let path = Path::new(&file_path);
 
@@ -85,7 +59,7 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     // Determine color based on severity
     let severity_color = match severity.trim() {
         "1" => "<span style=\"color:green;\">Low Severity</span>",
-        "2" => "<span style=\"color:yellow;\">Medium Severity</span>",
+        "2" => "<span style=\"color:orange;\">Medium Severity</span>",
         "3" => "<span style=\"color:red;\">High Severity</span>",
         _ => "<span style=\"color:gray;\">Unknown Severity</span>",
     };
@@ -141,7 +115,7 @@ async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
 
 
 
-#[cfg(not(test))]
+// #[cfg(not(test))]
 pub async fn run(context: SteadyContext
         ,archived_rx: SteadyRx<ArchivedFunction>, state: SteadyState<FunctionstorerInternalState>
     ) -> Result<(),Box<dyn Error>> {
@@ -194,21 +168,21 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,archived_rx: SteadyRx<
 }
 
 
-#[cfg(test)]
-pub async fn run(context: SteadyContext
-        ,archived_rx: SteadyRx<ArchivedFunction>, state: SteadyState<FunctionstorerInternalState>
-    ) -> Result<(),Box<dyn Error>> {
-    let mut cmd =  into_monitor!(context, [archived_rx],[]);
-    if let Some(responder) = cmd.sidechannel_responder() {
-         let mut archived_rx = archived_rx.lock().await;
-         while cmd.is_running(&mut ||
-             archived_rx.is_closed_and_empty()) {
-                // in main use graph.sidechannel_director node_call(msg,"FunctionStorer")
-                let _did_check = responder.equals_responder(&mut cmd,&mut archived_rx).await;
-         }
-    }
-    Ok(())
-}
+// #[cfg(test)]
+// pub async fn run(context: SteadyContext
+//         ,archived_rx: SteadyRx<ArchivedFunction>, state: SteadyState<FunctionstorerInternalState>
+//     ) -> Result<(),Box<dyn Error>> {
+//     let mut cmd =  into_monitor!(context, [archived_rx],[]);
+//     if let Some(responder) = cmd.sidechannel_responder() {
+//          let mut archived_rx = archived_rx.lock().await;
+//          while cmd.is_running(&mut ||
+//              archived_rx.is_closed_and_empty()) {
+//                 // in main use graph.sidechannel_director node_call(msg,"FunctionStorer")
+//                 let _did_check = responder.equals_responder(&mut cmd,&mut archived_rx).await;
+//          }
+//     }
+//     Ok(())
+// }
 
 #[cfg(test)]
 pub(crate) mod tests {
