@@ -47,32 +47,45 @@ async fn chatgpt_firstfunction(json: &str) -> Result<JsonValue, Box<dyn Error>> 
     let api_url = "https://api.openai.com/v1/chat/completions";
 
     let prompt_template = r#"
-    You will receive a list of functions in JSON format. The format follows these structures:
+You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will contain the absolute file path for the code you are analyzing.
 
-    - **For a function within a class:**
-      {class_name:function_name, path, starting_line_number, last_line_number}
+Your task is to parse this file and extract a structured header for each function it contains. You must identify and output a JSON-style structure for every function using the format below. Pay close attention to syntax, nesting, and comment handling. Your primary objective is accurate start and end line number detection for each function.
 
-    - **For a function outside a class:**
-    {function_name, path, starting_line_number, last_line_number}
-     
+CRITICAL RULES:
+1. Comments (single-line and multi-line) must be ignored when identifying function bodies. Start and end lines must reflect only actual code lines, but you must still count commented lines and empty lines toward line number totals.
+2. Blank lines and lines with only comments must be counted toward line numbers.
+3. For class methods, prefix the function name with the class name and a colon (className:functionName).
+4. Maintain the exact input file path from line 1 of the file for every output entry.
+5. If a function is nested inside a class or object, include the class/object name, even if it's in a language like Python or JavaScript.
+6. Your output must contain only JSON-style entries per function. Do not add explanations, extra formatting, line breaks, or markdown.
 
-    **Example Input:**
-    {"run", "src/actor/function_reviewer.rs", 22, 33}
-    {"internal_behavior", "src/actor/function_reviewer.rs", 35, 80}
-    {"test_simple_process", "src/actor/function_reviewer.rs", 91, 113}
-    {"run", "src/actor/archive.rs", 26, 38}
-    {"internal_behavior", "src/actor/archive.rs", 40, 96}
+=== FORMATTING SPECIFICATION ===
 
-    ***Example Output:**
-    {"run", "src/actor/archive.rs", 26, 38}
+For functions inside a class:
+{className:functionName, path, startLine, endLine}
 
-    **Task:**
-    Your goal is to conduct an AI-driven code review for the entire codebase.  
-    To begin, **choose one function from the provided list** and return its complete JSON structure.
+For top-level (non-class) functions:
+{functionName, path, startLine, endLine}
 
-    **Response Format:**
-    Your response must **only** contain the JSON structure of the selected function—no additional text, explanations, or formatting.
-    "#;
+=== EXAMPLE INPUT ===
+
+File path: /src/main.cpp  
+Code:
+1 int main()  
+2 {  
+3   return 0;  
+4 }  
+5 int sum(int a, int b) {  
+6   return (a + b);  
+7 }
+
+=== EXAMPLE OUTPUT ===
+{"main", "/src/main.cpp", 1, 4}
+{"sum", "/src/main.cpp", 5, 7}
+
+YOUR RESPONSE MUST ONLY CONTAIN THESE JSON STRUCTURES FOR EACH FUNCTION FOUND IN THE CODE. DO NOT ADD ANY HEADERS, DESCRIPTIONS, OR EXTRA TEXT.
+"#;
+
 
     let client = surf::Client::new();
     let request_body = json!({
