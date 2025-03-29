@@ -114,7 +114,9 @@ fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> 
 fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
     trace!("Extracting function from signal: {:?}", signal);
     
-    let function_name = signal.key.clone();
+    // Get both the full name and the base name (without prefix)
+    let full_name = signal.key.clone();
+    let base_name = signal.key.split(':').last().unwrap_or(&signal.key).to_string();
     let expected_filepath = signal.filepath.clone();
     
     let file = File::open("test.txt")?;
@@ -122,7 +124,8 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     
     let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
 
-    trace!("🔍 Looking for function '{}' in file '{}'", function_name, expected_filepath);
+    trace!("🔍 Looking for function '{}' (base name: '{}') in file '{}'", 
+           full_name, base_name, expected_filepath);
 
     for line in reader.lines() {
         let line = line?;
@@ -134,8 +137,14 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
             let start_line: usize = captures[3].parse()?;
             let end_line: usize = captures[4].parse()?;
 
-            // Check if both function name and filepath match
-            if captured_name == function_name && filepath == expected_filepath {
+            // Get both full and base names for the captured function
+            let captured_base_name = captured_name.split(':').last().unwrap_or(&captured_name);
+
+            // Try to match either the full name or the base name
+            let is_match = captured_name == full_name || 
+                          captured_base_name == base_name;
+
+            if is_match && filepath == expected_filepath {
                 trace!("✅ Found matching function '{}' in file '{}' (lines {}-{})", 
                     captured_name, filepath, start_line, end_line);
 
@@ -143,7 +152,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
                 let content = read_function_content(&filepath, start_line, end_line)?;
 
                 return Ok(CodeFunction {
-                    name: function_name,
+                    name: captured_name,  // Keep the original captured name
                     namespace: String::from(""),
                     filepath,
                     start_line,
@@ -152,14 +161,14 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
                     function_map: signal.remaining_functions.clone(),
                 });
             } else {
-                trace!("❌ No match: Expected '{}' in '{}', found '{}' in '{}'",
-                    function_name, expected_filepath, captured_name, filepath);
+                trace!("❌ No match: Expected '{}' or '{}' in '{}', found '{}' in '{}'",
+                    full_name, base_name, expected_filepath, captured_name, filepath);
             }
         }
     }
 
-    Err(format!("❌ Function '{}' not found in file '{}' at path '{}'", 
-        function_name, "test.txt", expected_filepath).into())
+    Err(format!("❌ Function '{}' (base name: '{}') not found in file '{}' at path '{}'", 
+        full_name, base_name, "test.txt", expected_filepath).into())
 }
 
 pub async fn run(context: SteadyContext

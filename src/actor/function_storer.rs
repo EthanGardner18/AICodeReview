@@ -9,7 +9,7 @@ use crate::actor::archive::ArchivedFunction;
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use chrono::{DateTime, Local};
 use std::fs;
@@ -95,14 +95,58 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
 async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
     let markdown = generate_markdown(archived_fn);
 
-    // Open the file in append mode
-    let mut file = OpenOptions::new()
-        .create(true)  // Create the file if it doesn't exist
-        .append(true)  // Open the file in append mode
-        .open("reviewed_information.md")?;
+    // Hard-coded base directory path for Linux systems
+    let base_dir = "/home/glassfrog";  // Change "user" to the actual username
+    let review_base_dir = PathBuf::from(base_dir).join("review_output");
+    
+    // Create the base review output directory
+    fs::create_dir_all(&review_base_dir)?;
 
+    // Get the original file path and convert it to a PathBuf
+    let original_path = PathBuf::from(&archived_fn.filepath);
+
+    // Create the full review file path by combining review_output with the original path
+    let mut review_file_path = review_base_dir;
+    
+    // Handle absolute paths by removing the leading slash if present
+    let relative_path = if archived_fn.filepath.starts_with('/') {
+        archived_fn.filepath.trim_start_matches('/').to_string()
+    } else {
+        archived_fn.filepath.clone()
+    };
+    
+    // Push each component of the path
+    for component in Path::new(&relative_path).components() {
+        match component {
+            std::path::Component::Normal(c) => review_file_path.push(c),
+            _ => continue, // Skip other component types (root, parent dir, etc.)
+        }
+    }
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = review_file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Change the extension to .md
+    review_file_path.set_extension("md");
+
+    println!("📝 Appending review to: {:?}", review_file_path);
+
+    // Open the file in append mode, creating it if it doesn't exist
+    let mut file = OpenOptions::new()
+        .create(true)      // Create the file if it doesn't exist
+        .append(true)      // Open in append mode
+        .write(true)       // Open in write mode
+        .open(&review_file_path)?;
+
+    // Add a separator between reviews if the file is not empty
+    if file.metadata()?.len() > 0 {
+        writeln!(file, "\n---\n")?;
+    }
+
+    // Write the markdown content
     file.write_all(markdown.as_bytes())?;
-    file.write_all(b"\n")?;  // Ensure a newline is added after each entry.
 
     Ok(())
 }
@@ -122,41 +166,33 @@ pub async fn run(context: SteadyContext
   internal_behavior(cmd,archived_rx, state).await
 }
 
-async fn internal_behavior<C: SteadyCommander>(mut cmd: C,archived_rx: SteadyRx<ArchivedFunction>, state: SteadyState<FunctionstorerInternalState>
- ) -> Result<(),Box<dyn Error>> {
-
+async fn internal_behavior<C: SteadyCommander>(
+    mut cmd: C,
+    archived_rx: SteadyRx<ArchivedFunction>, 
+    state: SteadyState<FunctionstorerInternalState>
+) -> Result<(), Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || FunctionstorerInternalState::default()).await;
     if let Some(mut state) = state_guard.as_mut() {
+        let mut archived_rx = archived_rx.lock().await;
+        
+        while cmd.is_running(&mut ||archived_rx.is_closed_and_empty()) {
+            let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut archived_rx,1));
 
-   //every read and write channel must be locked for this instance use, this is outside before the loop
-   let mut archived_rx = archived_rx.lock().await;
-
-   //this is the main loop of the actor, will run until shutdown is requested.
-   //the closure is called upon shutdown to determine if we need to postpone the shutdown
-   while cmd.is_running(&mut ||archived_rx.is_closed_and_empty()) {
-
-     // our loop avoids spinning by using await here on multiple criteria. clean is false if await
-     // returned early due to a shutdown request or closed channel.
-         let clean = await_for_all!(cmd.wait_closed_or_avail_units(&mut archived_rx,1)    );
-
-  
-          //TODO:  here is an example reading from archived_rx
-          match cmd.try_take(&mut archived_rx) {
-            Some(function) => {
-                if let Err(e) = store_function(&function).await {
-                    error!("Failed to store function: {}", e);
-                } else {
-                    trace!("Stored function: {:?}", function);
+            match cmd.try_take(&mut archived_rx) {
+                Some(function) => {
+                    if let Err(e) = store_function(&function).await {
+                        error!("Failed to store function: {}", e);
+                    } else {
+                        trace!("Stored function: {:?}", function);
+                    }
                 }
-            }
-            None => {
-                if clean {
-                   trace!("No function available to process");
+                None => {
+                    if clean {
+                        trace!("No function available to process");
+                    }
                 }
             }
         }
-
-      }
     }
     Ok(())
 }
