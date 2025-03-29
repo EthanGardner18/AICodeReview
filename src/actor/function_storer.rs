@@ -38,26 +38,22 @@ fn get_file_modified_time(file_path: String) -> Result<String, String> {
 }
 
 pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
-    // Parse the review message
-    let review_msg = archived_fn.review_message.trim_matches('{').trim_matches('}');
+    // Parse the review message using double backticks
+    let review_msg = archived_fn.review_message
+        .trim_matches('{')
+        .trim_matches('}')
+        .trim();
     
-    // Find the first part (function name) and severity
-    let mut parts = review_msg.splitn(3, ", ");
-    let function_name = parts.next().unwrap_or("Unknown");
-    let severity = parts.next().unwrap_or("Unknown");
+    // Split by double backticks
+    let parts: Vec<&str> = review_msg.split("``").collect();
     
-    // Get the rest of the message up to the last ", 1," or ", 0,"
-    let remaining = parts.next().unwrap_or("");
-    let review_text = if let Some(pos) = remaining.rfind(", 1,") {
-        &remaining[..pos]
-    } else if let Some(pos) = remaining.rfind(", 0,") {
-        &remaining[..pos]
-    } else {
-        remaining
-    };
-
+    // Extract components with safe indexing
+    let function_name = parts.get(0).map_or("Unknown", |s| s.trim());
+    let severity = parts.get(1).map_or("Unknown", |s| s.trim());
+    let review_text = parts.get(2).map_or("No review provided", |s| s.trim());
+    
     // Determine color based on severity
-    let severity_color = match severity.trim() {
+    let severity_color = match severity {
         "1" => "<span style=\"color:green;\">Low Severity</span>",
         "2" => "<span style=\"color:orange;\">Medium Severity</span>",
         "3" => "<span style=\"color:red;\">High Severity</span>",
@@ -76,7 +72,6 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         Err(e) => format!("Error: {}", e),
     };
 
-
     // Return the formatted markdown string
     format!(
         "## Function: `{}`\n\n\
@@ -85,15 +80,14 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
         | **Severity**      | {} |\n\
         | **Description**   | {} |\n\
         | **File Location** | {} (Lines {}-{}) |\n\
-        | **Last Modified**     | {} |\n",
+        | **Last Modified** | {} |\n",
         display_name,
         severity_color,
-        review_text.trim(),
+        review_text,
         archived_fn.filepath,
         archived_fn.start_line,
         archived_fn.end_line,
         modified_time
-        
     )
 }
 

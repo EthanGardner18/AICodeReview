@@ -84,7 +84,7 @@ fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, 
             let composite_key = format!("{}:{}", filepath, function_name);
             
             // Debug print
-            println!("🔍 Extracted -> Composite Key: {} | Path: {}", composite_key, filepath);
+            trace!("🔍 Extracted -> Composite Key: {} | Path: {}", composite_key, filepath);
 
             // Insert into HashMap: Key = filepath:function_name, Value = filepath
             function_details.insert(composite_key, filepath);
@@ -112,7 +112,7 @@ fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> 
 }
 
 fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
-    println!("Extracting function from signal: {:?}", signal);
+    trace!("Extracting function from signal: {:?}", signal);
     
     let function_name = signal.key.clone();
     let expected_filepath = signal.filepath.clone();
@@ -122,7 +122,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     
     let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
 
-    println!("🔍 Looking for function '{}' in file '{}'", function_name, expected_filepath);
+    trace!("🔍 Looking for function '{}' in file '{}'", function_name, expected_filepath);
 
     for line in reader.lines() {
         let line = line?;
@@ -136,7 +136,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
 
             // Check if both function name and filepath match
             if captured_name == function_name && filepath == expected_filepath {
-                println!("✅ Found matching function '{}' in file '{}' (lines {}-{})", 
+                trace!("✅ Found matching function '{}' in file '{}' (lines {}-{})", 
                     captured_name, filepath, start_line, end_line);
 
                 // Read the actual function content from the file
@@ -152,7 +152,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
                     function_map: signal.remaining_functions.clone(),
                 });
             } else {
-                println!("❌ No match: Expected '{}' in '{}', found '{}' in '{}'",
+                trace!("❌ No match: Expected '{}' in '{}', found '{}' in '{}'",
                     function_name, expected_filepath, captured_name, filepath);
             }
         }
@@ -191,11 +191,11 @@ async fn internal_behavior<C: SteadyCommander>(
         let mut loop_feedback_rx = loop_feedback_rx.lock().await;
         let mut functions_tx = functions_tx.lock().await;
 
-        println!("📌 Entering main loop of FunctionScraper...");
+        trace!("📌 Entering main loop of FunctionScraper...");
         let mut loop_check = true;
 
         while cmd.is_running(&mut || parsed_code_rx.is_closed_and_empty() && functions_tx.mark_closed() && loop_feedback_rx.is_closed_and_empty()) {
-            println!("✅ Inside the loop!");
+            println!("✅ Beginning Funciton review loop!");
 
             // Wait for messages from both channels
             if loop_check {

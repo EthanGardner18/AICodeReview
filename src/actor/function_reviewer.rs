@@ -123,23 +123,23 @@ Here are the remaining functions that haven’t been reviewed yet. After complet
 {}\n
 
 === RESPONSE FORMAT (STRICT) ===
-Your response **must** follow this exact structure, using backticks ` as delimiters:
+Your response **must** follow this exact structure, using backticks `` as delimiters:
 
-{functionName`severity`functionReview`number`nextFunctionName`nextFunctionPath}
+{{functionName~severity~functionReview~number~nextFunctionName~nextFunctionPath}}
 
 Where:
-- `functionName`: Name of the function you're reviewing now.
-- `severity`: A numeric severity level (1 = low, 2 = moderate, 3 = high).
-- `functionReview`: A concise, professional review in 200 words or fewer, with no line breaks.
-- `number`: 1 if you want to continue reviewing more functions, 0 if you’re satisfied with your assessment.
-- `nextFunctionName`: Name of the next function you want to review (only if number is 1).
-- `nextFunctionPath`: Full path to the next function file (only if number is 1).
+- ``functionName``: Name of the function you're reviewing now.
+- ``severity``: A numeric severity level (1 = low, 2 = moderate, 3 = high).
+- ``functionReview``: A concise, professional review in 200 words or fewer, with no line breaks.
+- ``number``: 1 if you want to continue reviewing more functions, 0 if you’re satisfied with your assessment.
+- ``nextFunctionName``: Name of the next function you want to review (only if number is 1).
+- ``nextFunctionPath``: Full path to the next function file (only if number is 1).
 
 Example response:
-{processFile`1`This function handles file processing with good error handling`1`validateInput`src/utils.rs}
+{{processFile``1``This function handles file processing with good error handling``1``validateInput``src/utils.rs}}
 
 CRITICAL RESPONSE FORMAT REQUIREMENTS:
-1. Respond ONLY with this exact format: {function_name`severity`review_text`number`next_function_name`path/to/file}
+1. Respond ONLY with this exact format: {{function_name``severity``review_text``number``next_function_name``path/to/file}}
 2. Do NOT use any markdown, quotes, backticks inside the review text, or any other formatting in the response
 3. Do NOT add any additional text before or after the response
 4. Do NOT include any line breaks in the review text

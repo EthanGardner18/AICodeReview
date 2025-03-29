@@ -54,38 +54,40 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     println!("Starting process_review_and_update_map");
     println!("Review message: {}", reviewed_function.review_message);
     
-    // Extract the parts using a more robust approach
-    let review_msg = reviewed_function.review_message.trim_matches('{').trim_matches('}');
+    // Extract the parts using double backtick separation and remove curly braces
+    let review_msg = reviewed_function.review_message
+        .trim_matches('{')
+        .trim_matches('}')
+        .trim();
+        
+    let parts: Vec<&str> = review_msg.split("``").collect();
     
-    // Find the last occurrence of ", 1," or ", 0," to split the review properly
-    let (review_part, remaining) = if let Some(pos) = review_msg.rfind(", 1,") {
-        (&review_msg[..pos], &review_msg[pos + 2..])
-    } else if let Some(pos) = review_msg.rfind(", 0,") {
-        (&review_msg[..pos], &review_msg[pos + 2..])
-    } else {
-        println!("Could not find continue flag in review message");
-        return None;
-    };
-    
-    // Split the remaining parts (after the review text)
-    let remaining_parts: Vec<&str> = remaining.split(", ").collect();
-    if remaining_parts.len() < 3 {
-        println!("Not enough parts found in remaining message");
+    // Check if we have all required parts
+    if parts.len() < 6 {
+        println!("Not enough parts in review message. Expected 6, got {}", parts.len());
+        println!("Parts: {:?}", parts);
         return None;
     }
     
-    let continue_flag = remaining_parts[0];  // Should be "1" or "0"
-    let next_function = remaining_parts[1];  // Next function name
-    let next_filepath = remaining_parts[2];  // File path
+    // Extract components using array indexing
+    let current_function = parts[0].trim();    // processFile
+    let severity = parts[1].trim();            // 1
+    let review_text = parts[2].trim();         // This function handles...
+    let continue_flag = parts[3].trim();       // 1
+    let next_function = parts[4].trim();       // validateInput
+    let next_filepath = parts[5].trim();       // src/utils.rs
     
-    // Clean up the continue flag - ensure we get just the number
-    let continue_flag = continue_flag.trim().chars().filter(|c| c.is_digit(10)).collect::<String>();
-    
-    println!("Continue flag (cleaned): {}", continue_flag);
+    println!("Parsed components:");
+    println!("Current function: {}", current_function);
+    println!("Severity: {}", severity);
+    println!("Review: {}", review_text);
+    println!("Continue flag: {}", continue_flag);
     println!("Next function: {}", next_function);
     println!("Next filepath: {}", next_filepath);
     
+    // Clean up the continue flag - ensure we get just the number
     let should_continue = continue_flag == "1";
+    
     if should_continue {
         println!("Available functions in map: {:?}", reviewed_function.function_map.keys());
         
@@ -102,10 +104,6 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
             let mut updated_map = reviewed_function.function_map.clone();
             updated_map.remove(&composite_key);
             
-            trace!("Found next function: {} at {}", composite_key, filepath);
-            println!("Found next function: {} at {}", composite_key, filepath);
-            
-            // Create the LoopSignal with the necessary information
             let signal = LoopSignal {
                 key: next_function.to_string(),
                 filepath: filepath.clone(),
@@ -115,19 +113,13 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
             return Some(signal);
         }
         
-        // If no exact match, search through all keys for a partial match
+        // If no exact match, try partial match
         for (key, filepath) in reviewed_function.function_map.iter() {
-            println!("Checking key: {}", key);
             if key.ends_with(&format!(":{}", next_function)) {
                 println!("Found matching key: {}", key);
-                // Clone the HashMap and remove the found function
                 let mut updated_map = reviewed_function.function_map.clone();
                 updated_map.remove(key);
                 
-                trace!("Found next function: {} at {}", key, filepath);
-                println!("Found next function: {} at {}", key, filepath);
-                
-                // Create the LoopSignal with the necessary information
                 let signal = LoopSignal {
                     key: next_function.to_string(),
                     filepath: filepath.clone(),
@@ -140,12 +132,9 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
         
         error!("Next function '{}' not found in remaining functions map", next_function);
         println!("Next function '{}' not found in remaining functions map", next_function);
-    } else {
-        trace!("Review process complete (flag = 0)");
-        println!("Review process complete (flag = 0)");
     }
     
-    // If we reach here, return a LoopSignal with an empty remaining_functions
+    // Return empty signal if we're done or if next function wasn't found
     let signal = LoopSignal {
         key: String::from(""),
         filepath: String::from(""),

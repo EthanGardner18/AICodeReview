@@ -1,41 +1,34 @@
-{"main", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/main.rs",19,45}
-{"build_graph", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/main.rs",47,142}
-{"test_graph_one", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/main.rs",154,204}
-{"to_cli_string", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/args.rs", 23, 28}
-{"systemd_action", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/args.rs", 29, 37}
-{"log_variants", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/args.rs", 40, 42}
-{"validate_logging_level", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/args.rs", 44, 52}
-{"write_review_to_file", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/archive.rs", 38, 51}
-{"process_review_and_update_map", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/archive.rs", 53, 155}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/archive.rs", 158, 170}
-{"internal_behavior", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/archive.rs", 172, 290}
-{"test_simple_process", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/archive.rs", 302, 330}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",30,41}
-{"chatgpt_firstfunction", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",43,106}
-{"call_chatgpt_api", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",108,169}
-{"append_to_file", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",172,188}
-{"internal_behavior", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",191,306}
-{"test_simple_process", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/parse_function.rs",320,342}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 27, 37}
-{"scan_directory_for_files", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 39, 61}
-{"read_file_with_line_numbers", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 63, 76}
-{"internal_behavior", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 78, 150}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 156, 167}
-{"test_simple_process", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/read_file.rs", 177, 193}
-{"get_file_modified_time", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 24, 38}
-{"generate_markdown", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 40, 98}
-{"store_function", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 101, 113}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 119, 129}
-{"internal_behavior", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 131, 167}
-{"test_simple_process", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_storer.rs", 194, 210}
-{"send_prompt_to_chatgpt","/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_reviewer.rs",47,88}
-{"review_function","/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_reviewer.rs",91,164}
-{"run","/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_reviewer.rs",168,280}
-{"internal_behavior","/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_reviewer.rs",181,279}
-{"test_simple_process","/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_reviewer.rs",291,313}
-{"write_hashmap_to_file", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 52, 65}
-{"extract_function_details", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 67, 99}
-{"read_function_content", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 102, 111}
-{"extract_function_from_signal", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 114, 162}
-{"run", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 165, 177}
-{"internal_behavior", "/Misc/projects/test-loop/combined_system/ai-codebase-reviewer/src/actor/function_scraper.rs", 179, 273}
+{"write_review_to_file", "src/actor/archive.rs", 38, 51}
+{"process_review_and_update_map", "src/actor/archive.rs", 53, 145}
+{"run", "src/actor/archive.rs", 147, 159}
+{"internal_behavior", "src/actor/archive.rs", 161, 280}
+{"test_simple_process", "src/actor/archive.rs", 291, 319}
+{"run", "src/actor/parse_function.rs", 30, 41}
+{"chatgpt_firstfunction", "src/actor/parse_function.rs", 43, 119}
+{"call_chatgpt_api", "src/actor/parse_function.rs", 121, 181}
+{"append_to_file", "src/actor/parse_function.rs", 185, 201}
+{"internal_behavior", "src/actor/parse_function.rs", 204, 320}
+{"test_simple_process", "src/actor/parse_function.rs", 333, 355}
+{"run", "src/actor/read_file.rs", 27, 37}
+{"scan_directory_for_files", "src/actor/read_file.rs", 39, 61}
+{"read_file_with_line_numbers", "src/actor/read_file.rs", 63, 76}
+{"internal_behavior", "src/actor/read_file.rs", 78, 150}
+{"run", "src/actor/read_file.rs", 156, 168}
+{"test_simple_process", "src/actor/read_file.rs", 177, 193}
+{"get_file_modified_time", "src/actor/function_storer.rs", 24, 38}
+{"generate_markdown", "src/actor/function_storer.rs", 40, 92}
+{"store_function", "src/actor/function_storer.rs", 95, 108}
+{"run", "src/actor/function_storer.rs", 113, 123}
+{"internal_behavior", "src/actor/function_storer.rs", 125, 161}
+{"test_simple_process", "src/actor/function_storer.rs", 188, 204}
+{"send_prompt_to_chatgpt","src/actor/function_reviewer.rs",47,88}
+{"review_function","src/actor/function_reviewer.rs",91,167}
+{"run","src/actor/function_reviewer.rs",171,283}
+{"internal_behavior","src/actor/function_reviewer.rs",184,282}
+{"test_simple_process","src/actor/function_reviewer.rs",294,316}
+{"write_hashmap_to_file", "src/actor/function_scraper.rs", 52, 65}
+{"extract_function_details", "src/actor/function_scraper.rs", 67, 100}
+{"read_function_content", "src/actor/function_scraper.rs", 102, 111}
+{"extract_function_from_signal", "src/actor/function_scraper.rs", 114, 162}
+{"run", "src/actor/function_scraper.rs", 165, 177}
+{"internal_behavior", "src/actor/function_scraper.rs", 179, 273}
