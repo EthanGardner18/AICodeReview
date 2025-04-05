@@ -8,19 +8,18 @@ use std::error::Error;
 use crate::actor::function_scraper::CodeFunction;
 
 use surf::Client;
-use serde::Deserialize;
+// use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use dotenv::dotenv;
 use std::env;
 use std::collections::HashMap;
-use surf::http::headers::HeaderValue;
+// use surf::http::headers::HeaderValue;
 use surf::http::headers::AUTHORIZATION;
 use serde_json::json;
 
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ReviewedFunction {
     pub name: String,
-    pub namespace: String,
     pub filepath: String,
     pub start_line: usize,
     pub end_line: usize,
@@ -33,13 +32,13 @@ pub(crate) struct ReviewedFunction {
 pub(crate) struct FunctionreviewerInternalState {
 }
 
-pub struct ReviewResponse {
-    pub function_name: String,
-    pub review: String,
-    pub continue_flag: i32,
-    pub next_function: String,
-    pub next_function_path: String,
-}
+// pub struct ReviewResponse {
+//     pub function_name: String,
+//     pub review: String,
+//     pub continue_flag: i32,
+//     pub next_function: String,
+//     pub next_function_path: String,
+// }
 
 
 
@@ -154,7 +153,6 @@ CRITICAL RESPONSE FORMAT REQUIREMENTS:
     
     let return_value = ReviewedFunction {
         name: func.name.clone(),
-        namespace: func.namespace.clone(),
         filepath: func.filepath.clone(),
         start_line: func.start_line,
         end_line: func.end_line,
@@ -162,7 +160,7 @@ CRITICAL RESPONSE FORMAT REQUIREMENTS:
         function_map: remaining_functions.clone()
     };
     
-    trace!("Review completed for function: {}:{}", func.name, func.namespace);
+    trace!("Review completed for function: {}", func.name);
     Ok(return_value)
 }
 

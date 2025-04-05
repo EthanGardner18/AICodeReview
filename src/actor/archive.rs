@@ -14,7 +14,6 @@ use std::io::Write;
 #[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ArchivedFunction {
     pub name: String,
-    pub namespace: String,
     pub filepath: String,
     pub start_line: usize,
     pub end_line: usize,
@@ -214,7 +213,6 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                 // Archive the current function
                 let archived = ArchivedFunction {
                     name: reviewed.name,
-                    namespace: reviewed.namespace,
                     filepath: reviewed.filepath,
                     start_line: reviewed.start_line,
                     end_line: reviewed.end_line,

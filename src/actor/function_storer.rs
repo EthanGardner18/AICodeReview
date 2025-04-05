@@ -10,7 +10,7 @@ use crate::actor::archive::ArchivedFunction;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+// use std::time::SystemTime;
 use chrono::{DateTime, Local};
 use std::fs;
 
@@ -48,7 +48,7 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     let parts: Vec<&str> = review_msg.split("``").collect();
     
     // Extract components with safe indexing
-    let function_name = parts.get(0).map_or("Unknown", |s| s.trim());
+    // let function_name = parts.get(0).map_or("Unknown", |s| s.trim());
     let severity = parts.get(1).map_or("Unknown", |s| s.trim());
     let review_text = parts.get(2).map_or("No review provided", |s| s.trim());
     

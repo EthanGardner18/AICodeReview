@@ -21,7 +21,6 @@ use std::io::Write;
 #[derive(Clone,Debug,Eq,PartialEq)]
 pub(crate) struct CodeFunction {
     pub name: String,
-    pub namespace: String,
     pub filepath: String,
     pub start_line: usize,
     pub end_line: usize,
@@ -34,7 +33,6 @@ impl Default for CodeFunction {
     fn default() -> Self {
         CodeFunction {
             name: String::new(),
-            namespace: String::new(),
             filepath: String::new(),
             start_line: 0,
             end_line: 0,
@@ -153,7 +151,6 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
 
                 return Ok(CodeFunction {
                     name: captured_name,  // Keep the original captured name
-                    namespace: String::from(""),
                     filepath,
                     start_line,
                     end_line,
@@ -229,7 +226,6 @@ async fn internal_behavior<C: SteadyCommander>(
                             if let Ok(function_content) = read_function_content(&path, start_line, last_line) {
                                 let container = CodeFunction {
                                     name: function_name,
-                                    namespace: String::from("global"),
                                     filepath: path, 
                                     start_line,
                                     end_line: last_line,
@@ -266,17 +262,6 @@ async fn internal_behavior<C: SteadyCommander>(
                 }
             }
             loop_check = false;
-
-
-            // Process any available parsed code messages
-            
-
-            // Wait for and process any loop feedback signals
-            // let _clean = await_for_all!(
-            //     cmd.wait_closed_or_avail_units(&mut loop_feedback_rx, 1)
-            // );
-
-
         }
     }
     Ok(())
