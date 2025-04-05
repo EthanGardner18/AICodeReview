@@ -95,11 +95,10 @@ async fn internal_behavior<C: SteadyCommander>(
         let input_dir = PathBuf::from(&input_path);
 
         // Define allowed file extensions
-        let coding_extensions = [
-            "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java",
-            "go", "html", "htm", "css", "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm",
-            "r", "md", "pas", "f90", "lisp", "cbl", "mdx", "ts", "jsp", "zig",
-        ];
+        let coding_extensions = ["py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c",
+ "js", "jsx", "ts", "tsx", "java", "go", "sh",
+ "php", "rb", "kt", "kts", "swift", "pl", "pm",
+ "r", "pas", "f90", "lisp", "cbl", "zig"];
 
         // Scan directory for files once
         let found_files = scan_directory_for_files(&input_dir, &coding_extensions);
