@@ -46,7 +46,7 @@ async fn chatgpt_firstfunction(json: &str) -> Result<JsonValue, Box<dyn Error>> 
 
     let api_url = "https://api.openai.com/v1/chat/completions";
 
-    let prompt_template = r#"
+    let prompt_template = let prompt_template = r#"
 You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will contain the absolute file path for the code you are analyzing.
 
 Your task is to parse this file and extract a structured header for each function it contains. You must identify and output a JSON-style structure for every function using the format below. Pay close attention to syntax, nesting, and comment handling. Your primary objective is accurate start and end line number detection for each function.
@@ -55,7 +55,7 @@ CRITICAL RULES:
 1. Comments (single-line and multi-line) must be ignored when identifying function bodies. Start and end lines must reflect only actual code lines, but you must still count commented lines and empty lines toward line number totals.
 2. Blank lines and lines with only comments must be counted toward line numbers.
 3. For class methods, prefix the function name with the class name and a colon (className:functionName).
-4. Maintain the exact input file path from line 1 of the file for every output entry.
+4. You must use the exact, full, unmodified input file path provided on the first line of the file for every output entry. Do not shorten, abbreviate, truncate, or remove any part of the file path, no matter how long it is.
 5. If a function is nested inside a class or object, include the class/object name, even if it's in a language like Python or JavaScript.
 6. Your output must contain only JSON-style entries per function. Do not add explanations, extra formatting, line breaks, or markdown.
 
@@ -85,7 +85,6 @@ Code:
 
 YOUR RESPONSE MUST ONLY CONTAIN THESE JSON STRUCTURES FOR EACH FUNCTION FOUND IN THE CODE. DO NOT ADD ANY HEADERS, DESCRIPTIONS, OR EXTRA TEXT.
 "#;
-
 
     let client = surf::Client::new();
     let request_body = json!({
