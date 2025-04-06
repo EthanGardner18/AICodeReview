@@ -46,7 +46,7 @@ async fn chatgpt_firstfunction(json: &str) -> Result<JsonValue, Box<dyn Error>> 
 
     let api_url = "https://api.openai.com/v1/chat/completions";
 
-    let prompt_template = let prompt_template = r#"
+    let prompt_template = r#"
 You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will contain the absolute file path for the code you are analyzing.
 
 Your task is to parse this file and extract a structured header for each function it contains. You must identify and output a JSON-style structure for every function using the format below. Pay close attention to syntax, nesting, and comment handling. Your primary objective is accurate start and end line number detection for each function.
@@ -249,7 +249,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
 
                         
 
-                            if let Err(e) = append_to_file("test.txt", content_inside_brackets) {
+                            if let Err(e) = append_to_file("parse_function.txt", content_inside_brackets) {
                                 eprintln!("Failed to write to file: {}", e);
                             }
                         } else {
@@ -264,7 +264,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
                 let mut test = String::new();
                 let final_message1 = "sample stuff".to_string();
                 if rec.lastFile == "T" {
-                test = fs::read_to_string("test.txt")
+                test = fs::read_to_string("parse_function.txt")
                     .expect("Failed to read file");
                 println!("File content when the stuff is True checkMark:\n{}", test);
 

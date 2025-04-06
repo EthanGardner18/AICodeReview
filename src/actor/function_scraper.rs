@@ -117,7 +117,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     let base_name = signal.key.split(':').last().unwrap_or(&signal.key).to_string();
     let expected_filepath = signal.filepath.clone();
     
-    let file = File::open("test.txt")?;
+    let file = File::open("parse_function.txt")?;
     let reader = BufReader::new(file);
     
     let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
@@ -165,7 +165,7 @@ fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box
     }
 
     Err(format!("❌ Function '{}' (base name: '{}') not found in file '{}' at path '{}'", 
-        full_name, base_name, "test.txt", expected_filepath).into())
+        full_name, base_name, "parse_function.txt", expected_filepath).into())
 }
 
 pub async fn run(context: SteadyContext
@@ -213,7 +213,7 @@ async fn internal_behavior<C: SteadyCommander>(
                     println!("✅ Received ParsedCode: {:?}", parsed_code);
                     
                     // Create initial CodeFunction from the first function
-                    if let Ok(functions) = extract_function_details("test.txt") {
+                    if let Ok(functions) = extract_function_details("parse_function.txt") {
                         if let Some(captures) = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)
                             .unwrap()
                             .captures(&parsed_code.firstFunction) 
