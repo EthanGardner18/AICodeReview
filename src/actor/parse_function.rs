@@ -89,7 +89,7 @@ REMEMBER:
 - Use the line numbers provided on the left of each line. Never attempt to count manually.
 - Your output must contain only JSON structures — no comments, headers, or explanations.
 - Be concise, accurate, and consistent.
-"#
+"#;
 
 
     let client = surf::Client::new();

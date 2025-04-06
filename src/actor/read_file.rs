@@ -70,7 +70,7 @@ async fn internal_behavior<C: SteadyCommander>(
         let input_dir = PathBuf::from(&input_path);
 
         let coding_extensions = [
-            "py", "cpp", "h", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java", "go",
+            "py", "cpp", "hpp", "cc", "cxx", "rs", "c", "js", "jsx", "ts", "tsx", "java", "go",
             "sh", "php", "rb", "kt", "kts", "swift", "pl", "pm", "r", "pas", "f90", "lisp", "cbl",
             "zig",
         ];
