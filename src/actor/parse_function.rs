@@ -47,44 +47,50 @@ async fn chatgpt_firstfunction(json: &str) -> Result<JsonValue, Box<dyn Error>> 
     let api_url = "https://api.openai.com/v1/chat/completions";
 
     let prompt_template = r#"
-You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will contain the absolute file path for the code you are analyzing.
+You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will always contain the absolute file path of the code you are analyzing.
 
-Your task is to parse this file and extract a structured header for each function it contains. You must identify and output a JSON-style structure for every function using the format below. Pay close attention to syntax, nesting, and comment handling. Your primary objective is accurate start and end line number detection for each function.
+Each subsequent line of code will be prefixed with an accurate line number (e.g., `42: <code>`). You can rely on these line numbers for precise tracking — you do not need to count or infer them yourself. These line numbers exist to make parsing easier and help you focus purely on structural detection.
+
+Your task is to parse the code and extract a structured header for every function it contains. For each function, return a JSON-style structure using the format specified below. Your primary goal is accurate start and end line number detection for **only the actual code**, while still counting blank and comment-only lines in the line number range.
 
 CRITICAL RULES:
-1. Comments (single-line and multi-line) must be ignored when identifying function bodies. Start and end lines must reflect only actual code lines, but you must still count commented lines and empty lines toward line number totals.
-2. Blank lines and lines with only comments must be counted toward line numbers.
+1. Ignore comments (single-line and multi-line) when identifying the logical start and end of function bodies. However, these lines must still be included in line number range.
+2. Blank lines and lines with only comments must still be counted toward line numbers.
 3. For class methods, prefix the function name with the class name and a colon (className:functionName).
-4. You must use the exact, full, unmodified input file path provided on the first line of the file for every output entry. Do not shorten, abbreviate, truncate, or remove any part of the file path, no matter how long it is.
-5. If a function is nested inside a class or object, include the class/object name, even if it's in a language like Python or JavaScript.
-6. Your output must contain only JSON-style entries per function. Do not add explanations, extra formatting, line breaks, or markdown.
+4. Always use the exact full input file path from the first line. Do not modify, truncate, or abbreviate it.
+5. If a function is nested within a class, object, or module, always include the container name, even in languages like Python or JavaScript.
+6. Every output entry must strictly follow the formatting structure provided. No extra formatting, explanations, or markdown.
 
 === FORMATTING SPECIFICATION ===
 
-For functions inside a class:
-{className:functionName, path, startLine, endLine}
+For class methods:
+{"className:functionName", "absoluteFilePath", startLine, endLine}
 
 For top-level (non-class) functions:
-{functionName, path, startLine, endLine}
+{"functionName", "absoluteFilePath", startLine, endLine}
 
 === EXAMPLE INPUT ===
 
 File path: /src/main.cpp  
 Code:
-1 int main()  
-2 {  
-3   return 0;  
-4 }  
-5 int sum(int a, int b) {  
-6   return (a + b);  
-7 }
+1: int main()  
+2: {  
+3:   return 0;  
+4: }  
+5: int sum(int a, int b) {  
+6:   return (a + b);  
+7: }
 
 === EXAMPLE OUTPUT ===
 {"main", "/src/main.cpp", 1, 4}
 {"sum", "/src/main.cpp", 5, 7}
 
-YOUR RESPONSE MUST ONLY CONTAIN THESE JSON STRUCTURES FOR EACH FUNCTION FOUND IN THE CODE. DO NOT ADD ANY HEADERS, DESCRIPTIONS, OR EXTRA TEXT.
-"#;
+REMEMBER:
+- Use the line numbers provided on the left of each line. Never attempt to count manually.
+- Your output must contain only JSON structures — no comments, headers, or explanations.
+- Be concise, accurate, and consistent.
+"#
+
 
     let client = surf::Client::new();
     let request_body = json!({
