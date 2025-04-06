@@ -17,7 +17,6 @@ pub(crate) struct FileData {
     pub lastFile: String,
 }
 
-//if no internal state is required (recommended) feel free to remove this.
 #[derive(Default)]
 pub(crate) struct ReadfileInternalState {}
 
@@ -92,49 +91,53 @@ async fn internal_behavior<C: SteadyCommander>(
                     String::new()
                 });
 
-                let content_bytes = content.as_bytes();
-                let mut offset = 0;
+                let mut chunk_buf = String::new();
+                let mut current_chunk_size = 0;
+                let mut line_number = 1;
 
-                while offset < content_bytes.len() {
-                    let chunk_end = min(offset + MAX_CHUNK_SIZE, content_bytes.len());
+                for line in content.lines() {
+                    let numbered_line = format!("{:>6}: {}\n", line_number, line);
+                    let line_bytes_len = numbered_line.as_bytes().len();
+                    line_number += 1;
 
-                    // Ensure UTF-8 boundary
-                   let chunk = match std::str::from_utf8(&content_bytes[offset..chunk_end]) {
-                    Ok(valid_str) => valid_str.to_string(),
-                    Err(_) => {
-                        // Try shrinking until we find a valid chunk
-                        let mut end = chunk_end;
-                        let valid_chunk = 'valid_utf8: loop {
-                            while end > offset {
-                                if let Ok(valid_str) = std::str::from_utf8(&content_bytes[offset..end]) {
-                                    break 'valid_utf8 valid_str.to_string();
-                                }
-                                end -= 1;
-                            }
-                            break String::new(); // fallback if no valid utf-8 chunk
+                    if current_chunk_size + line_bytes_len > MAX_CHUNK_SIZE {
+                        let data = FileData {
+                            path: file_path.display().to_string(),
+                            content: chunk_buf.clone(),
+                            lastFile: "F".to_string(),
                         };
-                        valid_chunk
+
+                        match cmd.try_send(&mut file_data_tx, data) {
+                            Ok(()) => {
+                                println!("Sent chunk ({} bytes)", chunk_buf.len());
+                            }
+                            Err(msg) => trace!("Error sending: {:?}", msg),
+                        }
+
+                        chunk_buf.clear();
+                        current_chunk_size = 0;
                     }
-                };
 
-                    let is_last_chunk = offset + chunk.len() == content_bytes.len();
-                    let is_final_message = is_last_file && is_last_chunk;
+                    chunk_buf.push_str(&numbered_line);
+                    current_chunk_size += line_bytes_len;
+                }
 
+                if !chunk_buf.is_empty() {
                     let data = FileData {
                         path: file_path.display().to_string(),
-                        content: chunk.clone(),
-                        lastFile: if is_final_message { "T".to_string() } else { "F".to_string() },
+                        content: chunk_buf.clone(),
+                        lastFile: if is_last_file { "T".to_string() } else { "F".to_string() },
                     };
 
                     match cmd.try_send(&mut file_data_tx, data) {
                         Ok(()) => {
                             println!(
-                                "Sent chunk ({} bytes) {}",
-                                chunk.len(),
-                                if is_final_message { "(last chunk of last file)" } else { "" }
+                                "Sent final chunk ({} bytes) {}",
+                                chunk_buf.len(),
+                                if is_last_file { "(last chunk of last file)" } else { "" }
                             );
 
-                            if is_final_message {
+                            if is_last_file {
                                 file_data_tx.mark_closed();
                                 println!("file_data_tx marked as closed.");
                                 println!("All files processed. Exiting actor.");
@@ -143,8 +146,6 @@ async fn internal_behavior<C: SteadyCommander>(
                         }
                         Err(msg) => trace!("Error sending: {:?}", msg),
                     }
-
-                    offset += chunk.len();
                 }
             }
         }
@@ -188,4 +189,3 @@ pub(crate) mod tests {
         let _results_file_data_vec = test_file_data_rx.testing_take().await;
     }
 }
-
