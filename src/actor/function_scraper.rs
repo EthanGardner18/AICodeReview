@@ -63,33 +63,49 @@ fn write_hashmap_to_file(hashmap: &HashMap<String, String>) -> Result<(), Box<dy
 }
 
 fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    let file = File::open(file_path)?;
+    // Attempt to open the file and create a buffered reader.
+    let file = File::open(file_path).map_err(|e| {
+        error!("Failed to open file {}: {:?}", file_path, e);
+        e
+    })?;
     let reader = BufReader::new(file);
     
-    // New regex to match: {"function_name", "file_path", start_line, end_line}
-    let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
-
+    // Compile the regex to match the pattern: {"function_name", "file_path", start_line, end_line}.
+    let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#).map_err(|e| {
+        error!("Failed to compile regex: {:?}", e);
+        e
+    })?;
+    
     let mut function_details = HashMap::new();
     
-    for line in reader.lines() {
-        let line = line?;
+    // Process each line from the file.
+    for line_result in reader.lines() {
+        let line = match line_result {
+            Ok(l) => l,
+            Err(e) => {
+                error!("Error reading a line from {}: {:?}", file_path, e);
+                continue; // Skip lines that produce an error.
+            }
+        };
         if let Some(captures) = re.captures(&line) {
-            // Extract function name and file path
+            // Extract function name and file path.
             let function_name = captures[1].to_string();
             let filepath = captures[2].to_string();
             
-            // Create composite key in format "filepath:function_name"
+            // Create a composite key in the format "filepath:function_name".
             let composite_key = format!("{}:{}", filepath, function_name);
             
-            // Debug print
+            // Debug print (only active in debug builds to avoid cluttering production logs).
+            #[cfg(debug_assertions)]
             trace!("🔍 Extracted -> Composite Key: {} | Path: {}", composite_key, filepath);
 
-            // Insert into HashMap: Key = filepath:function_name, Value = filepath
+            // Insert the extracted data into the HashMap.
             function_details.insert(composite_key, filepath);
         }
     }
     
-    // Write the populated HashMap to file
+    // Write the populated HashMap to a file.
+    // Note: This side effect is intentional and should be documented by the caller.
     if let Err(e) = write_hashmap_to_file(&function_details) {
         error!("❌ Failed to write HashMap to file: {:?}", e);
     }
@@ -100,11 +116,18 @@ fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, 
 fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
     let file = File::open(filepath)?;
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines()
-        .collect::<Result<Vec<_>, _>>()?;
+    let lines: Vec<String> = reader.lines().collect::<Result<Vec<_>, _>>()?;
     
-    let content = lines[start_line - 1..end_line]
-        .join("\n");
+    // Validate the provided line range.
+    if start_line == 0 || start_line > end_line || end_line > lines.len() {
+        return Err(format!(
+            "Invalid line range: start_line = {}, end_line = {} for file '{}' with {} total lines.",
+            start_line, end_line, filepath, lines.len()
+        ).into());
+    }
+    
+    // Read and join the specified range of lines (1-indexed).
+    let content = lines[start_line - 1..end_line].join("\n");
     
     Ok(content)
 }
@@ -112,61 +135,103 @@ fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> 
 fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
     trace!("Extracting function from signal: {:?}", signal);
     
-    // Get both the full name and the base name (without prefix)
-    let full_name = signal.key.clone();
-    let base_name = signal.key.split(':').last().unwrap_or(&signal.key).to_string();
+    // Retrieve the complete function name and explicitly extract the base name (portion after the last colon).
+    let full_function_name = signal.key.clone();
+    let base_function_name = signal.key
+        .split(':')
+        .last()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| {
+            // Although split always returns at least one element, we explicitly log and return the full key.
+            error!("No colon found in signal key; using full key as base name: {}", signal.key);
+            signal.key.clone()
+        });
     let expected_filepath = signal.filepath.clone();
     
-    let file = File::open("parse_function.txt")?;
+    // Define the file path that contains the function details.
+    let parse_file_path = "parse_function.txt";
+    let file = File::open(parse_file_path).map_err(|e| {
+        error!("Failed to open parse file '{}': {:?}", parse_file_path, e);
+        e
+    })?;
     let reader = BufReader::new(file);
     
-    let re = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)?;
+    // Define the regex pattern as a constant for clarity and maintainability.
+    const FUNCTION_REGEX_PATTERN: &str = r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#;
+    let function_re = Regex::new(FUNCTION_REGEX_PATTERN).map_err(|e| {
+        error!("Regex pattern compilation failed for pattern '{}': {:?}", FUNCTION_REGEX_PATTERN, e);
+        e
+    })?;
 
-    trace!("🔍 Looking for function '{}' (base name: '{}') in file '{}'", 
-           full_name, base_name, expected_filepath);
+    trace!(
+        "🔍 Searching for function '{}' (base name: '{}') in file '{}' for expected filepath '{}'",
+        full_function_name, base_function_name, parse_file_path, expected_filepath
+    );
 
-    for line in reader.lines() {
-        let line = line?;
-        println!("Checking line: {}", line);
+    // Iterate over each line in the parse file.
+    for line_result in reader.lines() {
+        let line = line_result.map_err(|e| {
+            error!("Error reading a line from '{}': {:?}", parse_file_path, e);
+            e
+        })?;
+        trace!("Checking line: {}", line);
 
-        if let Some(captures) = re.captures(&line) {
-            let captured_name = captures[1].to_string();
-            let filepath = captures[2].to_string();
-            let start_line: usize = captures[3].parse()?;
-            let end_line: usize = captures[4].parse()?;
+        if let Some(captures) = function_re.captures(&line) {
+            let captured_function_name = captures[1].to_string();
+            let captured_filepath = captures[2].to_string();
+            let start_line: usize = captures[3].parse().map_err(|e| {
+                error!("Error parsing start line from captured data: {:?}", e);
+                e
+            })?;
+            let end_line: usize = captures[4].parse().map_err(|e| {
+                error!("Error parsing end line from captured data: {:?}", e);
+                e
+            })?;
 
-            // Get both full and base names for the captured function
-            let captured_base_name = captured_name.split(':').last().unwrap_or(&captured_name);
+            // Explicitly extract the base name for the captured function.
+            let captured_base_name = captured_function_name
+                .split(':')
+                .last()
+                .map(|name| name.to_string())
+                .unwrap_or_else(|| captured_function_name.clone());
 
-            // Try to match either the full name or the base name
-            let is_match = captured_name == full_name || 
-                          captured_base_name == base_name;
+            // Match either the full function name or the base name.
+            let is_match = captured_function_name == full_function_name ||
+                           captured_base_name == base_function_name;
 
-            if is_match && filepath == expected_filepath {
-                trace!("✅ Found matching function '{}' in file '{}' (lines {}-{})", 
-                    captured_name, filepath, start_line, end_line);
+            if is_match && captured_filepath == expected_filepath {
+                trace!(
+                    "✅ Found matching function '{}' in file '{}' (lines {}-{})",
+                    captured_function_name, captured_filepath, start_line, end_line
+                );
 
-                // Read the actual function content from the file
-                let content = read_function_content(&filepath, start_line, end_line)?;
+                // Read the actual function content from the file.
+                let content = read_function_content(&captured_filepath, start_line, end_line)?;
 
                 return Ok(CodeFunction {
-                    name: captured_name,  // Keep the original captured name
-                    filepath,
+                    name: captured_function_name, // Retain the original captured name.
+                    filepath: captured_filepath,
                     start_line,
                     end_line,
                     content,
                     function_map: signal.remaining_functions.clone(),
                 });
             } else {
-                trace!("❌ No match: Expected '{}' or '{}' in '{}', found '{}' in '{}'",
-                    full_name, base_name, expected_filepath, captured_name, filepath);
+                trace!(
+                    "❌ No match: Expected '{}' or '{}' in '{}' but found '{}' in '{}'",
+                    full_function_name, base_function_name, expected_filepath,
+                    captured_function_name, captured_filepath
+                );
             }
         }
     }
 
-    Err(format!("❌ Function '{}' (base name: '{}') not found in file '{}' at path '{}'", 
-        full_name, base_name, "parse_function.txt", expected_filepath).into())
+    Err(format!(
+        "Function '{}' (base name: '{}') not found in file '{}' for expected filepath '{}'",
+        full_function_name, base_function_name, parse_file_path, expected_filepath
+    ).into())
 }
+
 
 pub async fn run(context: SteadyContext
         ,loop_feedback_rx: SteadyRx<LoopSignal>
