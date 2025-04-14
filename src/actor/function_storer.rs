@@ -8,11 +8,13 @@ use std::error::Error;
 use crate::actor::archive::ArchivedFunction;
 
 use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Write, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 // use std::time::SystemTime;
 use chrono::{DateTime, Local};
+use std::env;
 use std::fs;
+
 
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -91,12 +93,62 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     )
 }
 
+fn get_base_directory() -> io::Result<String> {
+    // Get home directory from environment variable
+    let default_dir = env::var("HOME")
+        .unwrap_or_else(|_| {
+            warn!("⚠️ Could not determine home directory. Using current directory.");
+            ".".to_string()
+        });
+    
+    // Try to open the .env file
+    let env_file = match File::open(".env") {
+        Ok(file) => file,
+        Err(e) => {
+            warn!("⚠️ Could not open .env file: {}. Using default directory.", e);
+            return Ok(default_dir);
+        }
+    };
+
+    let reader = BufReader::new(env_file);
+    
+    // Read the .env file line by line
+    for line in reader.lines() {
+        let line = line?;
+        
+        // Skip empty lines and comments
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        
+        // Look for the DIRECTORY variable
+        if line.starts_with("REVIEW_OUTPUT=") {
+            let directory = line
+                .split('=')
+                .nth(1)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| default_dir.clone());
+                
+            // Remove quotes if present
+            let directory = directory
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
+                
+            return Ok(directory);
+        }
+    }
+    
+    // If DIRECTORY variable not found, return default
+    warn!("⚠️ DIRECTORY variable not found in .env file. Using default directory.");
+    Ok(default_dir)
+}
 
 async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
     let markdown = generate_markdown(archived_fn);
 
-    // Hard-coded base directory path for Linux systems
-    let base_dir = "/home/glassfrog";  // Change "user" to the actual username
+    // Get the base directory from .env file
+    let base_dir = get_base_directory()?;
     let review_base_dir = PathBuf::from(base_dir).join("review_output");
     
     // Create the base review output directory
