@@ -10,7 +10,6 @@ use crate::actor::archive::ArchivedFunction;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write, BufRead, BufReader};
 use std::path::{Path, PathBuf};
-// use std::time::SystemTime;
 use chrono::{DateTime, Local};
 use std::env;
 use std::fs;
@@ -22,7 +21,33 @@ use std::fs;
 pub(crate) struct FunctionstorerInternalState {
 }
 
+/*
+    Function: get_file_modified_time
 
+    Description:
+    Retrieves the last modified timestamp of a file and formats it as a human-readable string.
+
+    Parameters:
+    - file_path: String — The path to the file whose modified time is to be retrieved.
+
+    Returns:
+    - Result<String, String> — Returns Ok(String) containing the formatted date and time on success.
+      On failure, returns an error message detailing the issue.
+
+    Errors:
+    - Returns an error if:
+      - The file metadata cannot be retrieved.
+      - The modified time cannot be accessed or converted.
+
+    Side Effects:
+    - Reads the metadata of the file located at the given path.
+    - Converts the modification timestamp into a formatted string.
+
+    Notes:
+    - Uses Chrono for date-time formatting.
+    - Formats timestamps as "YYYY-MM-DD HH:MM:SS" in local time.
+    - Helps track file modifications for logging or auditing purposes.
+*/
 fn get_file_modified_time(file_path: String) -> Result<String, String> {
     let path = Path::new(&file_path);
 
@@ -39,6 +64,32 @@ fn get_file_modified_time(file_path: String) -> Result<String, String> {
     Ok(datetime.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
+/*
+    Function: generate_markdown
+
+    Description:
+    Generates a formatted Markdown report for a reviewed function, including severity, description, and file details.
+
+    Parameters:
+    - archived_fn: &ArchivedFunction — A reference to the reviewed function containing metadata and review details.
+
+    Returns:
+    - String — A formatted Markdown string representing the function's review.
+
+    Errors:
+    - Does not return an error explicitly, but:
+      - If review components are missing, default placeholders are used.
+      - If the file modified time retrieval fails, an error message is embedded in the output.
+
+    Side Effects:
+    - Reads the last modified time of the function’s file.
+    - Parses structured AI-generated review text using double backtick delimiters.
+
+    Notes:
+    - Uses color-coded severity levels (green for low, orange for medium, red for high).
+    - Extracts function names from composite keys when applicable.
+    - Formats information using a Markdown table for clarity.
+*/
 pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     // Parse the review message using double backticks
     let review_msg = archived_fn.review_message
@@ -93,6 +144,36 @@ pub fn generate_markdown(archived_fn: &ArchivedFunction) -> String {
     )
 }
 
+/*
+    Function: get_base_directory
+
+    Description:
+    Determines the base directory for storing review outputs by checking environment variables and a `.env` file.
+    Falls back to the user's home directory or current directory if no configuration is found.
+
+    Parameters:
+    - None (The function operates based on environment variables and file content).
+
+    Returns:
+    - io::Result<String> — Returns Ok(String) with the determined base directory.
+      If an error occurs while reading the `.env` file, the default directory is returned.
+
+    Errors:
+    - Does not return an explicit error, but:
+      - Logs a warning if the home directory cannot be determined.
+      - Logs a warning if the `.env` file cannot be opened or read.
+      - Defaults to the current directory if no valid configuration is found.
+
+    Side Effects:
+    - Reads the `HOME` environment variable as the default directory.
+    - Attempts to read and parse the `.env` file for a `REVIEW_OUTPUT` variable.
+    - Logs warnings if the expected configuration values are missing or cannot be accessed.
+
+    Notes:
+    - Ensures a fallback mechanism in case configuration values are missing.
+    - Strips quotes from extracted values to maintain cleanliness.
+    - Provides a flexible method for dynamically setting the base directory for review outputs.
+*/
 fn get_base_directory() -> io::Result<String> {
     // Get home directory from environment variable
     let default_dir = env::var("HOME")
@@ -144,6 +225,36 @@ fn get_base_directory() -> io::Result<String> {
     Ok(default_dir)
 }
 
+/*
+    Function: store_function
+
+    Description:
+    Saves a reviewed function's Markdown report to a structured directory based on its file path.
+    Ensures the review output directory exists and maintains historical reviews using an append mode.
+
+    Parameters:
+    - archived_fn: &ArchivedFunction — A reference to the reviewed function containing metadata and review details.
+
+    Returns:
+    - io::Result<()> — Returns Ok(()) on success.
+      If an error occurs during file or directory operations, it returns an appropriate I/O error.
+
+    Errors:
+    - Returns an error if:
+      - The review output directory cannot be created.
+      - The review file cannot be opened or written to.
+
+    Side Effects:
+    - Generates a Markdown-formatted review using `generate_markdown()`.
+    - Reads the base directory from a `.env` file or falls back to a default location.
+    - Creates a structured directory under `review_output` to store reviews.
+    - Appends new review content to the file while preserving previous entries.
+
+    Notes:
+    - Adjusts file paths dynamically, ensuring absolute paths are handled appropriately.
+    - Uses separators (`---`) between reviews to maintain clarity in multi-entry files.
+    - Converts review files to `.md` format for easier readability.
+*/
 async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
     let markdown = generate_markdown(archived_fn);
 
@@ -153,9 +264,6 @@ async fn store_function(archived_fn: &ArchivedFunction) -> io::Result<()> {
     
     // Create the base review output directory
     fs::create_dir_all(&review_base_dir)?;
-
-    // Get the original file path and convert it to a PathBuf
-    let original_path = PathBuf::from(&archived_fn.filepath);
 
     // Create the full review file path by combining review_output with the original path
     let mut review_file_path = review_base_dir;
@@ -224,7 +332,7 @@ async fn internal_behavior<C: SteadyCommander>(
     state: SteadyState<FunctionstorerInternalState>
 ) -> Result<(), Box<dyn Error>> {
     let mut state_guard = steady_state(&state, || FunctionstorerInternalState::default()).await;
-    if let Some(mut state) = state_guard.as_mut() {
+    if let Some(mut _state) = state_guard.as_mut() {
         let mut archived_rx = archived_rx.lock().await;
         
         while cmd.is_running(&mut ||archived_rx.is_closed_and_empty()) {
@@ -248,23 +356,6 @@ async fn internal_behavior<C: SteadyCommander>(
     }
     Ok(())
 }
-
-
-// #[cfg(test)]
-// pub async fn run(context: SteadyContext
-//         ,archived_rx: SteadyRx<ArchivedFunction>, state: SteadyState<FunctionstorerInternalState>
-//     ) -> Result<(),Box<dyn Error>> {
-//     let mut cmd =  into_monitor!(context, [archived_rx],[]);
-//     if let Some(responder) = cmd.sidechannel_responder() {
-//          let mut archived_rx = archived_rx.lock().await;
-//          while cmd.is_running(&mut ||
-//              archived_rx.is_closed_and_empty()) {
-//                 // in main use graph.sidechannel_director node_call(msg,"FunctionStorer")
-//                 let _did_check = responder.equals_responder(&mut cmd,&mut archived_rx).await;
-//          }
-//     }
-//     Ok(())
-// }
 
 #[cfg(test)]
 pub(crate) mod tests {

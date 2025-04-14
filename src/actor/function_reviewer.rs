@@ -8,12 +8,10 @@ use std::error::Error;
 use crate::actor::function_scraper::CodeFunction;
 
 use surf::Client;
-// use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use dotenv::dotenv;
 use std::env;
 use std::collections::HashMap;
-// use surf::http::headers::HeaderValue;
 use surf::http::headers::AUTHORIZATION;
 use serde_json::json;
 
@@ -32,17 +30,37 @@ pub(crate) struct ReviewedFunction {
 pub(crate) struct FunctionreviewerInternalState {
 }
 
-// pub struct ReviewResponse {
-//     pub function_name: String,
-//     pub review: String,
-//     pub continue_flag: i32,
-//     pub next_function: String,
-//     pub next_function_path: String,
-// }
+/*
+    Function: send_prompt_to_chatgpt
 
+    Description:
+    Sends a prompt to OpenAI's ChatGPT API and retrieves the generated response.
+    The function constructs a request, sends it asynchronously, and parses the response.
 
+    Parameters:
+    - prompt: &str — A reference to the string containing the prompt to be sent.
 
+    Returns:
+    - Result<String, Box<dyn Error>> — Returns Ok(String) containing the ChatGPT response on success.
+      On failure, returns an error if the API request fails or the response cannot be parsed.
 
+    Errors:
+    - Returns an error if:
+      - The API key is missing from environment variables.
+      - The API request fails due to network issues or invalid parameters.
+      - The response from the API cannot be parsed or lacks expected structure.
+
+    Side Effects:
+    - Reads the OpenAI API key from environment variables.
+    - Sends a request to "https://api.openai.com/v1/chat/completions".
+    - Uses the Surf HTTP client to perform asynchronous network operations.
+    - Logs an error message if the API call fails.
+
+    Notes:
+    - Uses the GPT-4o-mini model with a maximum token limit of 500.
+    - Maintains a low temperature setting (0.0) to encourage deterministic responses.
+    - Parses the API response to extract the content of the first returned choice.
+*/
 async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> {
     dotenv().ok();
     let api_key = env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
@@ -87,6 +105,36 @@ async fn send_prompt_to_chatgpt(prompt: &str) -> Result<String, Box<dyn Error>> 
 }
 
 
+/*
+    Function: review_function
+
+    Description:
+    Conducts an AI-driven code review for a given function using OpenAI's ChatGPT.
+    It provides structured feedback based on predefined review criteria and severity levels.
+
+    Parameters:
+    - func: &CodeFunction — A reference to the function to be reviewed.
+    - remaining_functions: &HashMap<String, String> — A reference to a map containing remaining functions to review.
+
+    Returns:
+    - Result<ReviewedFunction, Box<dyn Error>> — Returns Ok(ReviewedFunction) with structured AI feedback on success.
+      On failure, returns an error if the API request fails or the response cannot be parsed.
+
+    Errors:
+    - Returns an error if:
+      - The API call fails or responds with an unexpected format.
+      - The function data cannot be properly processed.
+
+    Side Effects:
+    - Sends a request to OpenAI's ChatGPT API for automated code review.
+    - Logs trace messages for debugging purposes.
+    - Uses environment variables to retrieve the OpenAI API key.
+
+    Notes:
+    - Provides structured code reviews, including severity levels and recommendations.
+    - Ensures responses follow a strict format for easy parsing and further automation.
+    - Helps developers maintain clarity and improve maintainability in code review workflows.
+*/
 pub async fn review_function(
     func: &CodeFunction, 
     remaining_functions: &std::collections::HashMap<String, String>
@@ -184,7 +232,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
     println!("Reviewer actor is fired up🚀");
 
     let mut state_guard = steady_state(&state, || FunctionreviewerInternalState::default()).await;
-    if let Some(mut state) = state_guard.as_mut() {
+    if let Some(mut _state) = state_guard.as_mut() {
 
    //every read and write channel must be locked for this instance use, this is outside before the loop
    let mut functions_rx = functions_rx.lock().await;
@@ -201,33 +249,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
          match cmd.try_take(&mut functions_rx) {
             Some(rec) => {
 
-              // let reviewed = ReviewedFunction {
-              //     name: rec.name,
-              //     namespace: String::from("TEST NAMESPACE"),
-              //     filepath: rec.filepath,
-              //     start_line: rec.start_line,
-              //     end_line: rec.end_line,
-              //     review_message: String::from("SOMETHING COOL"),
-              // };
-
-                  //? remaing_funciotn is an empyt array
-                  // let remaining_functions:  = &rec.&function_map.clone();
-                  let api_key = "";
-
                   let reviewed = review_function(&rec, &rec.function_map).await?;
-
-                  // let reviewed = ReviewedFunction {
-                  //     name: String::from("test"),
-                  //     namespace: String::from("test"),
-                  //     filepath: String::from("test"),
-                  //     start_line: 100,
-                  //     end_line: 101,
-                  //     review_message: result.
-                  // };
-
-
-
-              //  ? println!("got rec: {:?}", &rec);
                   
                   println!("reviewer - archive \n{:#?}", &reviewed);
 
@@ -248,33 +270,6 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,functions_rx: SteadyRx
                 }
             }
         }
-
-
-
-  
-        //   //TODO:  here is an example reading from functions_rx
-        //   match cmd.try_take(&mut functions_rx) {
-        //       Some(rec) => {
-        //           trace!("got rec: {:?}", rec);
-        //       }
-        //       None => {
-        //           if clean {
-        //              //this could be an error if we expected a value
-        //           }
-        //       }
-        //   }
-  
-  
-        // //TODO:  here is an example writing to reviewed_tx
-        // match cmd.try_send(&mut reviewed_tx, ReviewedFunction::default() ) {
-        //     Ok(()) => {
-        //     },
-        //     Err(msg) => { //in the above await we should have confirmed space is available
-        //         trace!("error sending: {:?}", msg)
-        //     },
-        // }
-  
-
       }
     }
     Ok(())
@@ -310,6 +305,6 @@ pub(crate) mod tests {
        graph.block_until_stopped(Duration::from_secs(15));
        //TODO:  confirm values on the output channels
        //    assert_eq!(test_reviewed_rx.testing_avail_units().await, 1); // check expected count
-       let results_reviewed_vec = test_reviewed_rx.testing_take().await;
+       let _results_reviewed_vec = test_reviewed_rx.testing_take().await;
         }
 }

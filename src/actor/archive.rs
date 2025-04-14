@@ -33,7 +33,34 @@ pub struct LoopSignal {
 pub(crate) struct ArchiveInternalState {
 }
 
+/*
+    Function: write_review_to_file
 
+    Description:
+    Writes the provided review content to a file named "stored_functions.txt".
+    The content is appended to the file, ensuring previous entries are retained.
+
+    Parameters:
+    - review_content: &str — A reference to the review content that needs to be stored.
+
+    Returns:
+    - Result<(), Box<dyn Error>> — Returns Ok(()) on success.
+      On failure, returns an error if the file operation fails (e.g., permission denied, I/O error).
+
+    Errors:
+    - Returns an error if:
+      - The file cannot be created or opened.
+      - Writing to the file fails due to system restrictions.
+
+    Side Effects:
+    - Appends data to "stored_functions.txt" in the current working directory.
+    - Creates the file if it does not exist.
+    - Adds a newline after each review entry for readability.
+
+    Notes:
+    - Ensures past review entries are preserved by using append mode.
+    - Can be used for logging or maintaining a record of code reviews.
+*/
 pub async fn write_review_to_file(review_content: &str) -> Result<(), Box<dyn Error>> {
     let file_path = "stored_functions.txt";
     
@@ -49,9 +76,38 @@ pub async fn write_review_to_file(review_content: &str) -> Result<(), Box<dyn Er
     Ok(())
 }
 
+/*
+    Function: process_review_and_update_map
+
+    Description:
+    Processes a reviewed function's feedback and updates the remaining functions map.
+    Determines the next function to review based on structured AI responses.
+
+    Parameters:
+    - reviewed_function: &mut ReviewedFunction — A mutable reference to the reviewed function.
+
+    Returns:
+    - Option<LoopSignal> — Returns Some(LoopSignal) if another function is available for review.
+      If no further review is necessary, returns an empty LoopSignal.
+
+    Errors:
+    - Returns None if:
+      - The review message does not contain the expected components.
+      - The function to be reviewed next cannot be found in the remaining functions map.
+
+    Side Effects:
+    - Parses AI-generated review messages using predefined delimiters.
+    - Logs debugging information for better traceability.
+    - Updates the map of remaining functions by removing reviewed entries.
+
+    Notes:
+    - The AI-generated review follows a structured format with six expected components.
+    - Matches functions using a composite key combining the file path and function name.
+    - If no exact match is found, a partial match is attempted.
+    - Ensures iterative review continues efficiently by tracking remaining functions.
+*/
 fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Option<LoopSignal> {
-    println!("Starting process_review_and_update_map");
-    println!("Review message: {}", reviewed_function.review_message);
+    trace!("Review message: {}", reviewed_function.review_message);
     
     // Extract the parts using double backtick separation and remove curly braces
     let review_msg = reviewed_function.review_message
@@ -63,41 +119,34 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
     
     // Check if we have all required parts
     if parts.len() < 6 {
-        println!("Not enough parts in review message. Expected 6, got {}", parts.len());
-        println!("Parts: {:?}", parts);
+        trace!("Not enough parts in review message. Expected 6, got {}", parts.len());
+        trace!("Parts: {:?}", parts);
         return None;
     }
     
     // Extract components using array indexing
-    let current_function = parts[0].trim();    // processFile
-    let severity = parts[1].trim();            // 1
-    let review_text = parts[2].trim();         // This function handles...
+    // current_function, serverity, review_text not used in this function
+    let _current_function = parts[0].trim();    // processFile
+    let _severity = parts[1].trim();            // 1
+    let _review_text = parts[2].trim();         // This function handles...
     let continue_flag = parts[3].trim();       // 1
     let next_function = parts[4].trim();       // validateInput
     let next_filepath = parts[5].trim();       // src/utils.rs
-    
-    println!("Parsed components:");
-    println!("Current function: {}", current_function);
-    println!("Severity: {}", severity);
-    println!("Review: {}", review_text);
-    println!("Continue flag: {}", continue_flag);
-    println!("Next function: {}", next_function);
-    println!("Next filepath: {}", next_filepath);
     
     // Clean up the continue flag - ensure we get just the number
     let should_continue = continue_flag == "1";
     
     if should_continue {
-        println!("Available functions in map: {:?}", reviewed_function.function_map.keys());
+        trace!("Available functions in map: {:?}", reviewed_function.function_map.keys());
         
         // Create the composite key using the filepath and function name
         let composite_key = format!("{}:{}", next_filepath, next_function);
-        println!("Looking for composite key: {}", composite_key);
+        trace!("Looking for composite key: {}", composite_key);
         
         // Try exact match with composite key
         if reviewed_function.function_map.contains_key(&composite_key) {
             let filepath = reviewed_function.function_map.get(&composite_key).unwrap();
-            println!("Found exact matching composite key: {}", composite_key);
+            trace!("Found exact matching composite key: {}", composite_key);
             
             // Clone the HashMap and remove the found function
             let mut updated_map = reviewed_function.function_map.clone();
@@ -108,14 +157,14 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
                 filepath: filepath.clone(),
                 remaining_functions: updated_map,
             };
-            println!("Created LoopSignal: {:?}", signal);
+            trace!("Created LoopSignal: {:?}", signal);
             return Some(signal);
         }
         
         // If no exact match, try partial match
         for (key, filepath) in reviewed_function.function_map.iter() {
             if key.ends_with(&format!(":{}", next_function)) {
-                println!("Found matching key: {}", key);
+                trace!("Found matching key: {}", key);
                 let mut updated_map = reviewed_function.function_map.clone();
                 updated_map.remove(key);
                 
@@ -124,7 +173,7 @@ fn process_review_and_update_map(reviewed_function: &mut ReviewedFunction) -> Op
                     filepath: filepath.clone(),
                     remaining_functions: updated_map,
                 };
-                println!("Created LoopSignal: {:?}", signal);
+                trace!("Created LoopSignal: {:?}", signal);
                 return Some(signal);
             }
         }
@@ -159,10 +208,10 @@ pub async fn run(context: SteadyContext
 
 async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<ReviewedFunction>,loop_feedback_tx: SteadyTx<LoopSignal>,archived_tx: SteadyTx<ArchivedFunction>, state: SteadyState<ArchiveInternalState>
  ) -> Result<(),Box<dyn Error>> {
-    println!("Archive is fired up. ");
+    trace!("Archive is fired up. ");
 
     let mut state_guard = steady_state(&state, || ArchiveInternalState::default()).await;
-    if let Some(mut state) = state_guard.as_mut() {
+    if let Some(mut _state) = state_guard.as_mut() {
 
    //every read and write channel must be locked for this instance use, this is outside before the loop
    let mut reviewed_rx = reviewed_rx.lock().await;
@@ -180,15 +229,14 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
 
          match cmd.try_take(&mut reviewed_rx) {
             Some(mut reviewed) => {
-                println!("RECIEVED FROM REVIEWER");
+                trace!("RECIEVED FROM REVIEWER");
                 // Process the review to find the next function
                 if let Some(loop_signal) = process_review_and_update_map(&mut reviewed) {
                     // Send the next function information immediately
-                    println!("archive - scraper \n{:#?}", &loop_signal);
                     match cmd.try_send(&mut loop_feedback_tx, loop_signal) {
                         Ok(()) => {
-                            println!("Successfully sent next function signal. FROM ARCHIVE ACTOR TO FUNCTION SCRAPER");
-                            println!("SENT loop_signal TO SCRAPER")
+                            trace!("Successfully sent next function signal. FROM ARCHIVE ACTOR TO FUNCTION SCRAPER");
+                            trace!("SENT loop_signal TO SCRAPER")
                         },
                         Err(e) => {
                             error!("Failed to send loop signal: {:?}", e);
@@ -198,11 +246,8 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                     trace!("No next function to process");
                     if cmd.wait_shutdown().await
                     {
-                        print!("Code is done");
+                        trace!("Code is done");
                     }
-                    print!("outside if");
-                    // cmd.request_graph_stop();
-
                 }
 
                 // Write the current review to file
@@ -224,7 +269,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                 match cmd.try_send(&mut archived_tx, archived) {
                     Ok(()) => {
                         trace!("Successfully archived function");
-                        print!("{:#?}", check_flag);
+                        trace!("{:#?}", check_flag);
                     },
                     Err(e) => {
                         error!("Failed to send archived function: {:?}", e);
@@ -237,41 +282,6 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,reviewed_rx: SteadyRx<
                 }
             }
         }
-
-  
-        //   //TODO:  here is an example reading from reviewed_rx
-        //   match cmd.try_take(&mut reviewed_rx) {
-        //       Some(rec) => {
-        //           trace!("got rec: {:?}", rec);
-        //       }
-        //       None => {
-        //           if clean {
-        //              //this could be an error if we expected a value
-        //           }
-        //       }
-        //   }
-  
-  
-        // //TODO:  here is an example writing to loop_feedback_tx
-        // match cmd.try_send(&mut loop_feedback_tx, LoopSignal::default() ) {
-        //     Ok(()) => {
-        //     },
-        //     Err(msg) => { //in the above await we should have confirmed space is available
-        //         trace!("error sending: {:?}", msg)
-        //     },
-        // }
-  
-  
-        // //TODO:  here is an example writing to archived_tx
-        // match cmd.try_send(&mut archived_tx, ArchivedFunction::default() ) {
-        //     Ok(()) => {
-        //     },
-        //     Err(msg) => { //in the above await we should have confirmed space is available
-        //         trace!("error sending: {:?}", msg)
-        //     },
-        // }
-  
-
       }
     }
     Ok(())
@@ -309,10 +319,10 @@ pub(crate) mod tests {
        graph.block_until_stopped(Duration::from_secs(15));
        //TODO:  confirm values on the output channels
        //    assert_eq!(test_loop_feedback_rx.testing_avail_units().await, 1); // check expected count
-       let results_loop_feedback_vec = test_loop_feedback_rx.testing_take().await;
+       let _results_loop_feedback_vec = test_loop_feedback_rx.testing_take().await;
         
        //TODO:  confirm values on the output channels
        //    assert_eq!(test_archived_rx.testing_avail_units().await, 1); // check expected count
-       let results_archived_vec = test_archived_rx.testing_take().await;
+       let _results_archived_vec = test_archived_rx.testing_take().await;
         }
 }

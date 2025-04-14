@@ -47,6 +47,31 @@ impl Default for CodeFunction {
 pub(crate) struct FunctionscraperInternalState {
 }
 
+/*
+    Function: write_hashmap_to_file
+
+    Description:
+    Writes the contents of a given HashMap<String, String> to a file named "test_hashmap.txt".
+    Each key-value pair is written on a new line in the format: "Key: ... | Value: ...".
+
+    Parameters:
+    - hashmap: &HashMap<String, String> — A reference to the HashMap containing data to be written.
+
+    Returns:
+    - Result<(), Box<dyn Error>> — Returns Ok(()) on success. On failure, returns an error if the file
+      could not be created, opened, or written to.
+
+    Errors:
+    - Returns an error if the file operation fails (e.g., permission denied, I/O error).
+
+    Side Effects:
+    - Creates or overwrites a file named "test_hashmap.txt" in the current working directory.
+    - Prints a confirmation message to standard output upon successful write.
+
+    Notes:
+    - The file is truncated before writing to ensure old data is cleared.
+    - This function is typically used for debugging or persisting analysis results.
+*/
 fn write_hashmap_to_file(hashmap: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -62,6 +87,35 @@ fn write_hashmap_to_file(hashmap: &HashMap<String, String>) -> Result<(), Box<dy
     Ok(())
 }
 
+/*
+    Function: extract_function_details
+
+    Description:
+    Parses a file containing structured function metadata entries, extracts relevant information,
+    and returns a HashMap mapping a composite key of "filepath:function_name" to the function's file path.
+    This is typically used to index available function definitions from a pre-parsed file.
+
+    Parameters:
+    - file_path: &str — Path to the file that contains lines of function metadata in the format:
+      {"function_name", "file_path", start_line, end_line}.
+
+    Returns:
+    - Result<HashMap<String, String>, Box<dyn Error>> — On success, returns a HashMap where each key is a
+      "filepath:function_name" composite string and the value is the function's file path. On failure,
+      returns an error indicating what went wrong (e.g., file read error, regex parse error).
+
+    Errors:
+    - Returns an error if the file cannot be opened or the regex fails to compile.
+    - Lines that fail to read or parse correctly are skipped with errors logged.
+
+    Side Effects:
+    - Attempts to write the extracted HashMap to a file using `write_hashmap_to_file`.
+      Any failure in this operation is logged but does not halt execution.
+
+    Notes:
+    - Lines that do not match the expected regex pattern are silently ignored.
+    - This function is tolerant of partial failures: it continues processing on individual line errors.
+*/
 fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
     // Attempt to open the file and create a buffered reader.
     let file = File::open(file_path).map_err(|e| {
@@ -113,6 +167,31 @@ fn extract_function_details(file_path: &str) -> Result<HashMap<String, String>, 
     Ok(function_details)
 }
 
+/*
+    Function: read_function_content
+
+    Description:
+    Reads and extracts a block of lines corresponding to a function definition from a given source file,
+    based on specified starting and ending line numbers. This is typically used to retrieve the source
+    code for a function when its line boundaries are known.
+
+    Parameters:
+    - filepath: &str — The path to the file containing the function definition.
+    - start_line: usize — The line number where the function starts (1-indexed).
+    - end_line: usize — The line number where the function ends (inclusive, 1-indexed).
+
+    Returns:
+    - Result<String, Box<dyn Error>> — On success, returns the concatenated string containing the
+      lines of the function. On failure, returns an error indicating the cause (e.g., file not found,
+      invalid line range, I/O failure).
+
+    Errors:
+    - Returns an error if the file cannot be read.
+    - Returns an error if the provided line range is invalid (e.g., start > end, or lines out of bounds).
+
+    Notes:
+    - The line numbers are assumed to be 1-based (e.g., the first line in the file is line 1).
+*/
 fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> Result<String, Box<dyn Error>> {
     let file = File::open(filepath)?;
     let reader = BufReader::new(file);
@@ -131,6 +210,39 @@ fn read_function_content(filepath: &str, start_line: usize, end_line: usize) -> 
     
     Ok(content)
 }
+
+
+/*
+    Function: extract_function_from_signal
+
+    Description:
+    Extracts function details from a given LoopSignal by searching a parse file.
+    It attempts to find a matching function entry based on the function name or its base name.
+
+    Parameters:
+    - signal: &LoopSignal — A reference to the signal containing function information.
+
+    Returns:
+    - Result<CodeFunction, Box<dyn Error>> — Returns Ok(CodeFunction) on success with extracted details.
+      On failure, returns an error if the function could not be found or read.
+
+    Errors:
+    - Returns an error if:
+      - The parse file cannot be opened.
+      - A line cannot be read from the file.
+      - The regex pattern fails to match function details.
+      - Function content retrieval encounters an issue.
+
+    Side Effects:
+    - Reads from the file "parse_function.txt".
+    - Logs trace details for debugging during the search process.
+    - Can return a formatted error message upon failure.
+
+    Notes:
+    - Uses regular expressions for structured parsing of function details.
+    - Both full function names and base names are considered for matches.
+    - The function content is retrieved separately once a match is found.
+*/
 
 fn extract_function_from_signal(signal: &LoopSignal) -> Result<CodeFunction, Box<dyn Error>> {
     trace!("Extracting function from signal: {:?}", signal);
@@ -254,10 +366,9 @@ async fn internal_behavior<C: SteadyCommander>(
     functions_tx: SteadyTx<CodeFunction>,
     state: SteadyState<FunctionscraperInternalState>,
 ) -> Result<(), Box<dyn Error>> {
-    println!("🚀 FunctionScraper is fired up.");
 
     let mut state_guard = steady_state(&state, || FunctionscraperInternalState::default()).await;
-    if let Some(mut state) = state_guard.as_mut() {
+    if let Some(mut _state) = state_guard.as_mut() {
         let mut parsed_code_rx = parsed_code_rx.lock().await;
         let mut loop_feedback_rx = loop_feedback_rx.lock().await;
         let mut functions_tx = functions_tx.lock().await;
@@ -272,10 +383,9 @@ async fn internal_behavior<C: SteadyCommander>(
             if loop_check {
                 let _clean = await_for_all!(
                     cmd.wait_closed_or_avail_units(&mut parsed_code_rx, 1)
-                    // cmd.wait_closed_or_avail_units(&mut loop_feedback_rx, 1)
                 );
                 while let Some(parsed_code) = cmd.try_take(&mut parsed_code_rx) {
-                    println!("✅ Received ParsedCode: {:?}", parsed_code);
+                    trace!("✅ Received ParsedCode: {:?}", parsed_code);
                     
                     // Create initial CodeFunction from the first function
                     if let Ok(functions) = extract_function_details("parse_function.txt") {
@@ -298,7 +408,7 @@ async fn internal_behavior<C: SteadyCommander>(
                                     function_map: functions,
                                 };
                                 
-                                println!("📤 Sending initial function: {:?}", container.name);
+                                trace!("📤 Sending initial function: {:?}", container.name);
                                 if let Err(e) = cmd.try_send(&mut functions_tx, container) {
                                     error!("❌ Failed to send initial function: {:?}", e);
                                 }
