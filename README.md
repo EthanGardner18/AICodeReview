@@ -23,7 +23,7 @@ cargo build --release
 cargo run --release
 ```
 
-## Adding an Image
+## The Asynchronous Structure
 To include an image in this README, use the following syntax:
 
 ![Project-Diagram](images/ai-codebase-review.png)
