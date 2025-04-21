@@ -20,6 +20,8 @@ cargo build
 
 this will just compile the debug executable and not the release.
 
+Currently our ```cargo test``` functionality is not fully implemented. 
+
 ### Installation
 ```sh
 # Clone the repository
