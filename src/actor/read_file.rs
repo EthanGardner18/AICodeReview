@@ -8,19 +8,17 @@ use std::error::Error;
 use std::io;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::cmp::min;
 
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct FileData {
     pub path: String,
     pub content: String,
-    pub lastFile: String,
+    pub last_file: String,
 }
 
 #[derive(Default)]
 pub(crate) struct ReadfileInternalState {}
 
-#[cfg(not(test))]
 pub async fn run(
     context: SteadyContext,
     file_data_tx: SteadyTx<FileData>,
@@ -104,7 +102,7 @@ async fn internal_behavior<C: SteadyCommander>(
                         let data = FileData {
                             path: file_path.display().to_string(),
                             content: chunk_buf.clone(),
-                            lastFile: "F".to_string(),
+                            last_file: "F".to_string(),
                         };
 
                         match cmd.try_send(&mut file_data_tx, data) {
@@ -126,7 +124,7 @@ async fn internal_behavior<C: SteadyCommander>(
                     let data = FileData {
                         path: file_path.display().to_string(),
                         content: chunk_buf.clone(),
-                        lastFile: if is_last_file { "T".to_string() } else { "F".to_string() },
+                        last_file: if is_last_file { "T".to_string() } else { "F".to_string() },
                     };
 
                     match cmd.try_send(&mut file_data_tx, data) {
@@ -153,39 +151,3 @@ async fn internal_behavior<C: SteadyCommander>(
     Ok(())
 }
 
-#[cfg(test)]
-pub async fn run(
-    context: SteadyContext,
-    file_data_tx: SteadyTx<FileData>,
-    state: SteadyState<ReadfileInternalState>,
-) -> Result<(), Box<dyn Error>> {
-    let mut cmd = into_monitor!(context, [], [file_data_tx]);
-    if let Some(responder) = cmd.sidechannel_responder() {
-        let mut file_data_tx = file_data_tx.lock().await;
-        while cmd.is_running(&mut || file_data_tx.mark_closed()) {
-            let _did_echo = responder.echo_responder(&mut cmd, &mut file_data_tx).await;
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use std::time::Duration;
-    use steady_state::*;
-    use super::*;
-
-    #[async_std::test]
-    pub(crate) async fn test_simple_process() {
-        let mut graph = GraphBuilder::for_testing().build(());
-        let (file_data_tx, test_file_data_rx) = graph.channel_builder().with_capacity(4).build();
-        let state = new_state();
-        graph.actor_builder()
-            .with_name("UnitTest")
-            .build_spawn(move |context| internal_behavior(context, file_data_tx.clone(), state.clone()));
-        graph.start();
-        graph.request_stop();
-        graph.block_until_stopped(Duration::from_secs(15));
-        let _results_file_data_vec = test_file_data_rx.testing_take().await;
-    }
-}

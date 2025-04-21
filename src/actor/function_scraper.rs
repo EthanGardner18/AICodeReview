@@ -391,7 +391,8 @@ async fn internal_behavior<C: SteadyCommander>(
                     if let Ok(functions) = extract_function_details("parse_function.txt") {
                         if let Some(captures) = Regex::new(r#"\{\s*"([^"]+)",\s*"([^"]+)",\s*(\d+),\s*(\d+)\s*\}"#)
                             .unwrap()
-                            .captures(&parsed_code.firstFunction) 
+                            //TODO REVERT first_function to camelCase
+                            .captures(&parsed_code.first_function) 
                         {
                             let function_name = captures[1].to_string();
                             let path = captures[2].to_string();

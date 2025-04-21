@@ -8,7 +8,7 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::read_file::FileData;
 use serde_json::Value as JsonValue;
-use std::path::{Path, PathBuf};
+// use std::path::{Path, PathBuf};
 use serde_json::json;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -16,9 +16,9 @@ use std::fs;
 use async_std::task;
 
 
-#[derive(Default,Clone,Debug,Eq,PartialEq)]
+#[derive(Default,Clone,Debug,Eq,PartialEq)] 
 pub(crate) struct ParsedCode {
-   pub firstFunction: String, //TODO:  remove dummy and put your channel message fields here
+   pub first_function: String, //TODO:  remove dummy and put your channel message fields here
 }
 
 //if no internal state is required (recommended) feel free to remove this.
@@ -212,7 +212,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
     println!("Parse function actor is fired up. ");
 
     let mut state_guard = steady_state(&state, || ParsefunctionInternalState::default()).await;
-    if let Some(mut state) = state_guard.as_mut() {
+    if let Some(mut _state) = state_guard.as_mut() {
 
    //every read and write channel must be locked for this instance use, this is outside before the loop
    let mut file_data_rx = file_data_rx.lock().await;
@@ -267,22 +267,22 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
                     }
                 }
 
-                let mut test = String::new();
-                let final_message1 = "sample stuff".to_string();
-                if rec.lastFile == "T" {
-                test = fs::read_to_string("parse_function.txt")
+                let mut _test = String::new();
+                let _final_message1 = "sample stuff".to_string();
+                if rec.last_file == "T" {
+                _test = fs::read_to_string("parse_function.txt")
                     .expect("Failed to read file");
-                println!("File content when the stuff is True checkMark:\n{}", test);
+                println!("File content when the stuff is True checkMark:\n{}", _test);
 
                 // Call the async function and print the response
               let response = task::block_on(async {
-                    chatgpt_firstfunction(&test).await.ok()
+                    chatgpt_firstfunction(&_test).await.ok()
                 }).unwrap_or_else(|| json!({"choices": [{"message": {"content": ""}}]}));
                 
                 // Print the response
                 let final_message = response["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
                 let data = ParsedCode {
-                 firstFunction: final_message,
+                 first_function: final_message,
                 };
                  match cmd.try_send(&mut parsed_code_tx, data.clone() ) {
                         Ok(()) => {
@@ -356,6 +356,6 @@ pub(crate) mod tests {
        graph.block_until_stopped(Duration::from_secs(15));
        //TODO:  confirm values on the output channels
        //    assert_eq!(test_parsed_code_rx.testing_avail_units().await, 1); // check expected count
-       let results_parsed_code_vec = test_parsed_code_rx.testing_take().await;
+       let _results_parsed_code_vec = test_parsed_code_rx.testing_take().await;
         }
 }
