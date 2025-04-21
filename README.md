@@ -8,11 +8,23 @@ This is an **AI Codebase Review** project built in **Rust**, utilizing an **asyn
 - Efficient detection of inefficient code patterns
 - User-friendly suggestions for optimization
 
-## Installation
+## Testing / Development
+
+To test / develop the project download using the installation process below.
+
+For testing purposes you do not have to use the --release option but instead do...
+
+```sh
+cargo build
+```
+
+this will just compile the debug executable and not the release.
+
+### Installation
 ```sh
 # Clone the repository
-git clone https://github.com/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/AiCodeReview.git
+cd AiCodeReview
 
 # Build the project
 cargo build --release
