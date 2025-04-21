@@ -1,3 +1,42 @@
+/*
+    File: parse_function_actor.rs
+
+    Description:
+    This actor is responsible for parsing structured function metadata from source code files
+    using OpenAI's GPT models. It listens for incoming `FileData` messages containing 
+    numbered code content, sends them to the GPT-4o-mini model with specific parsing instructions, 
+    and processes the returned JSON to extract function structure and metadata.
+
+    Responsibilities:
+    - Receives line-numbered source code and associated file path through `file_data_rx`
+    - Sends a prompt to the OpenAI API to identify function definitions and their line spans
+    - Appends raw JSON response to a local file ("parse_function.txt")
+    - On receiving the final file (`last_file == "T"`), reprocesses all extracted functions to prepare final structured output
+    - Sends a `ParsedCode` message through `parsed_code_tx` for further processing
+
+    Key Features:
+    - Two stages of AI interaction:
+        1. Extract function headers from line-numbered code
+        2. Refine/validate headers once all files are processed
+    - Works asynchronously using `steady_state` actors and channels
+    - Uses dotenv to load sensitive API keys securely from environment
+    - Handles API errors and malformed responses gracefully with debug logging
+
+    Usage:
+    - Ensure `.env` file includes `OPENAI_API_KEY`
+    - This actor is triggered automatically within a steady-state graph via `run()`
+    - Receives input via `FileData`, emits results via `ParsedCode`
+
+    Related Modules:
+    - read_file.rs: Sends line-numbered source files to this actor
+    - function_scraper.rs (or equivalent): Receives the `ParsedCode` message for downstream use
+
+    Notes:
+    - Output JSON is expected to match the format:
+      {"function_name", "absoluteFilePath", startLine, endLine}
+      or {"className:functionName", ...} for class methods.
+    - Final parsing logic is triggered only when the last file chunk is detected.
+*/
 
 #[allow(unused_imports)]
 use log::*;
@@ -8,7 +47,6 @@ use crate::Args;
 use std::error::Error;
 use crate::actor::read_file::FileData;
 use serde_json::Value as JsonValue;
-// use std::path::{Path, PathBuf};
 use serde_json::json;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -16,7 +54,7 @@ use std::fs;
 use async_std::task;
 
 
-#[derive(Default,Clone,Debug,Eq,PartialEq)] 
+#[derive(Default,Clone,Debug,Eq,PartialEq)]
 pub(crate) struct ParsedCode {
    pub first_function: String, //TODO:  remove dummy and put your channel message fields here
 }
@@ -40,12 +78,45 @@ pub async fn run(context: SteadyContext
   internal_behavior(cmd,file_data_rx, parsed_code_tx, state).await
 }
 
-async fn chatgpt_firstfunction(json: &str) -> Result<JsonValue, Box<dyn Error>> {
-    dotenv::dotenv().ok();
+
+/*
+    Function: chatgpt_first_function
+
+    Description:
+    Sends a request to the OpenAI GPT model (gpt-4o-mini) to extract the structural 
+    details of functions from a chunk of source code. The input is a formatted string 
+    of code (with line numbers and a file path), and the model is prompted to return 
+    structured JSON entries for each function found in the code.
+
+    Parameters:
+    json: A string (`&str`) containing the file path and numbered source code to be analyzed.
+
+    Returns:
+    Result<JsonValue, Box<dyn Error>>: On success, returns the parsed JSON output from the model 
+    containing function headers and their line numbers. On failure, returns an error message.
+
+    Notes:
+    - Relies on the `OPENAI_API_KEY` from the `.env` file for authorization.
+    - Uses a detailed system prompt to instruct the model on formatting and expectations.
+    - Ensures only valid JSON structures are returned — no extra explanations or markdown.
+    - Uses the `surf` HTTP client to make a POST request to the OpenAI API.
+
+    Example:
+    let response = chatgpt_first_function(&formatted_code_string).await?;
+    println!("{}", response);
+*/
+
+async fn chatgpt_first_function(json: &str) -> Result<JsonValue, Box<dyn Error>> {
+    // Loads environment variables from the `.env` file into the process environment.
+    // This allows access to secrets like API keys without hardcoding them.
+    dotenv::dotenv().ok();  
+    // Retrieves the OpenAI API key from the loaded environment variables.
+    // If the key is missing, the program will panic with a clear error message.        
     let api_key = std::env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
-
+    // Sets the endpoint URL for OpenAI's chat completion API.
+    // This is the URL the POST request will be sent to.
     let api_url = "https://api.openai.com/v1/chat/completions";
-
+    //The template of the prompt we are using
     let prompt_template = r#"
 You are a precise and experienced Code Structure Extraction Agent. You will be given source code in any programming language. The very first line of input will always contain the absolute file path of the code you are analyzing.
 
@@ -92,43 +163,83 @@ REMEMBER:
 "#;
 
 
-    let client = surf::Client::new();
-    let request_body = json!({
-        "model": "gpt-4o-mini",
-        "messages": [
-            { "role": "system", "content": "You are a highly accurate AI-powered code reviewer." },
-            { "role": "user", "content": format!(
-                "{}\n\n{}\n\nJSON List of Functions:\n{}",
-                prompt_template.trim(),
-                "Review this list according to the instructions above.",
-                json
-            )}
-        ],
-        "max_tokens": 1000,
-        "temperature": 0.0
-    });
+    // Create a new HTTP client instance using the `surf` crate
+let client = surf::Client::new();
 
-    let mut response = client
-        .post(api_url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .body(surf::Body::from_json(&request_body)?)
-        .await?;
+// Construct the JSON request body with the model, messages, and configuration
+let request_body = json!({
+    "model": "gpt-4o-mini", // Specify the OpenAI model to use
+    "messages": [
+        // System message sets the behavior and role of the assistant
+        { "role": "system", "content": "You are a highly accurate AI-powered code reviewer." },
+        
+        // User message includes the prompt template and the actual code input
+        { "role": "user", "content": format!(
+            "{}\n\n{}\n\nJSON List of Functions:\n{}",
+            prompt_template.trim(), // Instructions and formatting guide
+            "Review this list according to the instructions above.",
+            json // Actual code to be analyzed
+        )}
+    ],
+    "max_tokens": 1000, // Limit the length of the response
+    "temperature": 0.0   // Set to 0 for deterministic, consistent output
+});
 
-    if response.status().is_success() {
-        let response_body: JsonValue = response.body_json().await?;
-        Ok(response_body)
-    } else {
-        let error_message = response.body_string().await?;
-        Err(format!("API request failed: {}", error_message).into())
-    }
+// Send the POST request to the OpenAI API endpoint with headers and request body
+let mut response = client
+    .post(api_url)
+    .header("Authorization", format!("Bearer {}", api_key)) // Attach the API key
+    .body(surf::Body::from_json(&request_body)?) // Send the JSON as the request body
+    .await?; // Await the response asynchronously
+
+// If the API responds with success (200 OK)
+if response.status().is_success() {
+    // Parse the response body as JSON and return it
+    let response_body: JsonValue = response.body_json().await?;
+    Ok(response_body)
+} else {
+    // On failure, capture the error message and return it as a boxed error
+    let error_message = response.body_string().await?;
+    Err(format!("API request failed: {}", error_message).into())
 }
 
+}
+
+/*
+    File: chatgpt_function_parser.rs
+
+    Description:
+    This module defines an asynchronous function that interacts with the OpenAI ChatGPT API 
+    to analyze and extract structured metadata about functions from a given source code file. 
+    The input includes the file's content and absolute path, and the output is a JSON array 
+    indicating function names, start and end line numbers, and the file path — with support 
+    for both top-level functions and class methods.
+
+    Key Features:
+    - Sends a detailed prompt with guidelines for parsing and formatting
+    - Automatically includes environment-based OpenAI API key via dotenv
+    - Formats the response to match a strict, newline-separated JSON structure
+    - Supports handling functions nested inside classes
+    - Counts comment and blank lines toward line numbers without treating them as code
+
+    Usage:
+    Set `OPENAI_API_KEY` in your `.env` file. Call `call_chatgpt_api(file_content, file_path)` 
+    with the content of a code file and its full path. The response will contain JSON-formatted 
+    function metadata for downstream processing.
+*/
+
+
 async fn call_chatgpt_api(file_content: &str, file_path: &str) -> Result<JsonValue, Box<dyn Error>> {
-    dotenv::dotenv().ok();
+    // Loads environment variables from the `.env` file into the process environment.
+    // This allows access to secrets like API keys without hardcoding them.
+    dotenv::dotenv().ok();  
+    // Retrieves the OpenAI API key from the loaded environment variables.
+    // If the key is missing, the program will panic with a clear error message.        
     let api_key = std::env::var("OPENAI_API_KEY").expect("API key not found in environment variables");
-
+    // Sets the endpoint URL for OpenAI's chat completion API.
+    // This is the URL the POST request will be sent to.
     let api_url = "https://api.openai.com/v1/chat/completions";
-
+    //PROMPT TEMPLATE
     let prompt_template = r#"
         You will receive a file of any coding language, the first line will have the path to the file you are looking at. I would like you to parse the code and only store a header for each function in this format. One
         issue you need to check for is that there are comments in the code, so you need to make sure you are starting at the correct line number and ending at the correct line number. Don't forget that different coding
@@ -154,65 +265,108 @@ async fn call_chatgpt_api(file_content: &str, file_path: &str) -> Result<JsonVal
         {"sum", "src/main.cpp",5,7}
     "#;
 
-    let client = surf::Client::new();
-    let request_body = json!({
-        "model": "gpt-4o-mini",
-        "messages": [
-            { "role": "system", "content": "You are a code parser specializing in analyzing functions." },
-            { "role": "user", "content": format!(
-                "{}\n\n{}\n\nFile Path: {}\n\nFile Content:\n{}",
-                prompt_template.trim(),
-                "Parse this file according to the format above.",
-                file_path,
-                file_content
-            )}
-        ],
-        "max_tokens": 450,
-        "temperature": 0.0
-    });
+    // Create an HTTP client using the `surf` crate for making API requests
+let client = surf::Client::new();
 
-    let mut response = client
-        .post(api_url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .body(surf::Body::from_json(&request_body)?)
-        .await?;
+// Construct the JSON body to be sent to the OpenAI Chat API
+// - The system prompt defines the assistant's role as a function-parsing expert
+// - The user prompt includes instructions, the file path, and the file content
+// - The temperature is set to 0.0 for deterministic (non-random) output
+let request_body = json!({
+    "model": "gpt-4o-mini",
+    "messages": [
+        { "role": "system", "content": "You are a code parser specializing in analyzing functions." },
+        { "role": "user", "content": format!(
+            "{}\n\n{}\n\nFile Path: {}\n\nFile Content:\n{}",
+            prompt_template.trim(),
+            "Parse this file according to the format above.",
+            file_path,
+            file_content
+        )}
+    ],
+    "max_tokens": 450,     // Limits the response size to 450 tokens
+    "temperature": 0.0     // Ensures consistent and predictable outputs
+});
 
-    if response.status().is_success() {
-        let response_body: JsonValue = response.body_json().await?;
-        Ok(response_body)
-    } else {
-        let error_message = response.body_string().await?;
-        Err(format!("API request failed: {}", error_message).into())
-    }
+// Send a POST request to the OpenAI API with the appropriate headers and body
+let mut response = client
+    .post(api_url)
+    .header("Authorization", format!("Bearer {}", api_key))   // Attach API key for authentication
+    .body(surf::Body::from_json(&request_body)?)              // Convert request body to JSON
+    .await?;                                                  // Await the response
+
+// Check if the response status indicates success
+if response.status().is_success() {
+    // Parse and return the JSON body from the API response
+    let response_body: JsonValue = response.body_json().await?;
+    Ok(response_body)
+} else {
+    // If the request failed, return a formatted error with the server's message
+    let error_message = response.body_string().await?;
+    Err(format!("API request failed: {}", error_message).into())
+}
+
 }
 
 
+/*
+    Function: append_to_file
+
+    Description:
+    Appends each non-empty line of the provided content to a specified file. 
+    Leading/trailing whitespace is trimmed from each line, and optional trailing 
+    commas are removed before writing. If the file does not exist, it will be created.
+
+    Parameters:
+    file_path: A string slice (`&str`) representing the path to the file to append to.
+    content: A string slice (`&str`) representing the multiline content to append.
+
+    Returns:
+    std::io::Result<()>: Returns `Ok(())` on success, or an I/O error if the file 
+    cannot be opened or written to.
+
+    Notes:
+    - Lines that are empty after trimming are skipped.
+    - Each valid line is written on a new line in the file.
+    - Uses `OpenOptions` to enable file creation and appending.
+
+    Example:
+    append_to_file("output.txt", "hello,\nworld,\n") 
+    // Appends:
+    // hello
+    // world
+*/
+
 fn append_to_file(file_path: &str, content: &str) -> std::io::Result<()> {
+    // Open the file in append mode; create it if it doesn't exist.
+    // This allows new content to be added to the end of the file.
     let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(file_path)?;
+        .create(true)   // Create the file if it doesn't exist
+        .append(true)   // Open the file in append mode (adds to the end)
+        .open(file_path)?; // Return an error if the file can't be opened
 
+    // Iterate through each line in the provided content string
     for line in content.lines() {
-        let cleaned_line = line.trim() // Removes leading and trailing spaces
-            .trim_end_matches(','); // Optional: Removes trailing comma if you don't want it
+        // Clean the line by trimming leading/trailing spaces
+        // and removing a trailing comma if present
+        let cleaned_line = line.trim()
+            .trim_end_matches(','); // Optional: strip trailing commas
 
+        // Only write non-empty lines to the file
         if !cleaned_line.is_empty() {
-            writeln!(file, "{}", cleaned_line)?;
+            writeln!(file, "{}", cleaned_line)?; // Write the cleaned line followed by a newline
         }
     }
 
+    // Return success if all lines are processed without error
     Ok(())
 }
 
 
 async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx<FileData>,parsed_code_tx: SteadyTx<ParsedCode>, state: SteadyState<ParsefunctionInternalState>
  ) -> Result<(),Box<dyn Error>> {
-
-    println!("Parse function actor is fired up. ");
-
     let mut state_guard = steady_state(&state, || ParsefunctionInternalState::default()).await;
-    if let Some(mut _state) = state_guard.as_mut() {
+    if let Some(_state) = state_guard.as_mut() {
 
    //every read and write channel must be locked for this instance use, this is outside before the loop
    let mut file_data_rx = file_data_rx.lock().await;
@@ -231,7 +385,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
           match cmd.try_take(&mut file_data_rx) {
               Some(rec) => {
                 trace!("got rec: {:?}", rec);
-                  println!("Message received successfully in the parse function actor");
+                  eprintln!("Message received successfully in the parse function actor");
                   
 
                 let response = call_chatgpt_api(&rec.content, &rec.path).await;
@@ -272,11 +426,11 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
                 if rec.last_file == "T" {
                 _test = fs::read_to_string("parse_function.txt")
                     .expect("Failed to read file");
-                println!("File content when the stuff is True checkMark:\n{}", _test);
+                eprintln!("File content when the stuff is True checkMark:\n{}", _test);
 
                 // Call the async function and print the response
               let response = task::block_on(async {
-                    chatgpt_firstfunction(&_test).await.ok()
+                    chatgpt_first_function(&_test).await.ok()
                 }).unwrap_or_else(|| json!({"choices": [{"message": {"content": ""}}]}));
                 
                 // Print the response
@@ -286,14 +440,14 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
                 };
                  match cmd.try_send(&mut parsed_code_tx, data.clone() ) {
                         Ok(()) => {
-                            println!("First function to be reviewed sent to Function_scraper actor: {:?}", data);
+                            eprintln!("First function to be reviewed sent to Function_scraper actor: {:?}", data);
                         },
                         Err(msg) => { //in the above await we should have confirmed space is available
                             trace!("error sending: {:?}", msg)
                         },
                     }
                 parsed_code_tx.mark_closed();
-                println!("Parsed code channel closed.");
+                eprintln!("Parsed code channel closed.");
 
                 // **Break out of the loop**
                 break;
@@ -302,7 +456,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
 
 
             } else {
-                println!("Not the last file, skipping read.");
+                eprintln!("Not the last file, skipping read.");
             }
 
 
@@ -310,7 +464,7 @@ async fn internal_behavior<C: SteadyCommander>(mut cmd: C,file_data_rx: SteadyRx
               }
               None => {
                   if clean {
-                     println!("ERROR RX WAS NOT RECIEVED");
+                     eprintln!("ERROR RX WAS NOT RECIEVED");
                   }
               }
           }
