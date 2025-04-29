@@ -133,7 +133,7 @@ case $choice in
     echo "-> sudo systemctl start ${unit_name}.service"
     ;;
   2)  # Daily
-    tod=$(get_valid_time "Time (HH:MM:SS): ")
+    tod=$(get_valid_time "Time (HH:MM:SS) (in military time): ")
     svc="/etc/systemd/system/${unit_name}.service"
     cmd="/usr/bin/systemd-inhibit --what=sleep --mode=block ${binary_path}"
     create_base_service "$svc" "Run ${binary_name} daily" "$cmd"
@@ -150,7 +150,7 @@ Persistent=true
 WantedBy=timers.target
 EOF
     echo "Created $svc and $tmr"
-    echo "-> sudo systemctl enable --now ${unit_name}.timer"
+    echo "-> sudo systemctl enable ${unit_name}.timer"
     ;;
   3)  # Interval
     unit=$(get_interval_unit "Interval in minutes or hours? (m/h): ")
@@ -173,14 +173,13 @@ Persistent=true
 WantedBy=timers.target
 EOF
     echo "Created $svc and $tmr"
-    echo "-> sudo systemctl enable --now ${unit_name}.timer"
+    echo "-> sudo systemctl enable ${unit_name}.timer"
     ;;
   4)  # Path
     envf="${project_root}/.env"
     [[ -f "$envf" ]] || { echo ".env not found"; exit 1; }
     source "$envf"
     [[ -n "$DIRECTORY" ]] || { echo "DIRECTORY not set in .env"; exit 1; }
-    esc=$(systemd-escape --path "$DIRECTORY")
     svc="/etc/systemd/system/${unit_name}.service"
     cmd="/usr/bin/systemd-inhibit --what=sleep --mode=block ${binary_path}"
     create_base_service "$svc" "Run ${binary_name} on changes" "$cmd"
@@ -190,14 +189,14 @@ EOF
 Description=Watch ${DIRECTORY} for changes
 
 [Path]
-PathModified=${esc}
+PathModified=${DIRECTORY}
 Unit=${unit_name}.service
 
 [Install]
 WantedBy=multi-user.target
 EOF
     echo "Created $svc and $pth"
-    echo "-> sudo systemctl enable --now ${unit_name}.path"
+    echo "-> sudo systemctl enable ${unit_name}.path"
     ;;
 esac
 
