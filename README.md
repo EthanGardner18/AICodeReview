@@ -2,19 +2,6 @@
 
 Running an AI code review can take minutes—or even hours—and you don’t want it tying up your terminal or interrupting other tasks. On Linux, we use **systemd** to run reviews as a **background process**, so they can work quietly on their own.
 
-### What’s a background process?
-A background process runs without keeping a terminal window open. You can close your terminal, keep coding, or even log out—your review keeps running.
-
-### What is systemd?
-systemd is the built-in “service manager” on most Linux distributions. It can:
-- **Start** programs automatically at boot  
-- **Schedule** tasks by clock time or interval  
-- **Watch** folders for file changes and react immediately  
-- **Keep** all logs in one place (`journalctl`)  
-- **Restart** services if they crash  
-
----
-
 ## Unit Files
 
 systemd uses simple text files called **units**, stored in `/etc/systemd/system/`:
@@ -35,7 +22,7 @@ systemd uses simple text files called **units**, stored in `/etc/systemd/system/
    > ⚠️ **Path units don’t support spaces** in directory names.
 
 ### Limitations on WSL
-- **`.timer`** and **`.path`** units often don’t fire reliably under Windows Subsystem for Linux (WSL).  
+- **`.timer`** and **`.path`** units may or may not fire reliably under Windows Subsystem for Linux (WSL).  
 - The **`.service`** unit itself works fine on WSL, so manual runs still work.  
 - For full timer/path support, use a **native Linux** or VM.
 
@@ -45,21 +32,49 @@ systemd uses simple text files called **units**, stored in `/etc/systemd/system/
 
 Instead of hand-editing unit files (which requires `sudo nano …` or `sudo vim …`), run our installer:
 
+Make sure the DIRECTORY variable in the .env file is not empty and is a real path.
+Make sure the is a compiled binary in the /target/release folder.
+If theres not, or if you're not sure, make one with: cargo build --release
+
 cd /path/to/your/project
 sudo bash install.sh
 
-You’ll be prompted to choose one of four modes:
+1. Manual Service
 
-1. Manual
-Installs only the .service (run on demand).
+Creates a service that runs on demand
+Use when you want to manually trigger reviews
+Run with: sudo systemctl start unit-name.service
 
-2. Specific time
-Installs a .service plus a daily .timer.
+2. Daily Timer
 
-3. Interval
-Installs a .service plus a repeating .timer.
+Runs at a specific time each day
+Format: HH:MM (24-hour/military time)
+Example: 21:00:00 runs at 9:00 PM daily
+Starts on the next occurrence of the specified time
+Use for scheduled daily code reviews
+Enabled with: sudo systemctl enable unit-name.timer
+If user wants the first run to be after enabling:
+Use: sudo systemctl enable --now unit-name.timer
 
-4. Directory watch
-Installs a .service plus a .path unit (event-driven).
+3. Interval Timer
 
-All unit files land in /etc/systemd/system/ and require root privileges.
+Runs repeatedly at fixed intervals
+Choose minutes (m) or hours (h)
+Example: Setting "2h" runs every 2 hours
+First run occurs after boot, then follows interval
+Use for continuous review cycles
+Enabled with: sudo systemctl enable unit-name.timer
+If user wants the first run to be after enabling:
+Use: sudo systemctl enable --now unit-name.timer
+
+4. Directory Watch
+
+Monitors a directory for changes
+Automatically runs when files are created/modified
+Directory path is taken from DIRECTORY in your .env file
+If path is changed in .env file, user must also change the .path file manually
+Use for real-time reviews as you update code
+⚠️ Path cannot contain spaces
+Enabled with: sudo systemctl enable unit-name.path
+If user wants the first run to be after enabling:
+Use: sudo systemctl enable --now unit-name.path
