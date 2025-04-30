@@ -41,40 +41,40 @@ sudo bash install.sh
 
 1. Manual Service
 
-Creates a service that runs on demand
-Use when you want to manually trigger reviews
+Creates a service that runs on demand. 
+Use when you want to manually trigger reviews. 
 Run with: sudo systemctl start unit-name.service
 
 2. Daily Timer
 
-Runs at a specific time each day
-Format: HH:MM (24-hour/military time)
-Example: 21:00:00 runs at 9:00 PM daily
-Starts on the next occurrence of the specified time
-Use for scheduled daily code reviews
-Enabled with: sudo systemctl enable unit-name.timer
-If user wants the first run to be after enabling:
-Use: sudo systemctl enable --now unit-name.timer
+Runs at a specific time each day. 
+Format: HH:MM (24-hour/military time). 
+Example: 21:00:00 runs at 9:00 PM daily. 
+Starts on the next occurrence of the specified time. 
+Use for scheduled daily code reviews. 
+Enabled with: sudo systemctl enable unit-name.timer. 
+If user wants the first run to be after enabling,
+use: sudo systemctl enable --now unit-name.timer
 
 3. Interval Timer
 
-Runs repeatedly at fixed intervals
-Choose minutes (m) or hours (h)
-Example: Setting "2h" runs every 2 hours
-First run occurs after boot, then follows interval
-Use for continuous review cycles
-Enabled with: sudo systemctl enable unit-name.timer
-If user wants the first run to be after enabling:
-Use: sudo systemctl enable --now unit-name.timer
+Runs repeatedly at fixed intervals. 
+Choose minutes (m) or hours (h). 
+Example: Setting "2h" runs every 2 hours. 
+First run occurs after boot, then follows interval. 
+Use for continuous review cycles. 
+Enabled with: sudo systemctl enable unit-name.timer. 
+If user wants the first run to be after enabling,
+use: sudo systemctl enable --now unit-name.timer
 
 4. Directory Watch
 
-Monitors a directory for changes
-Automatically runs when files are created/modified
-Directory path is taken from DIRECTORY in your .env file
-If path is changed in .env file, user must also change the .path file manually
-Use for real-time reviews as you update code
-⚠️ Path cannot contain spaces
-Enabled with: sudo systemctl enable unit-name.path
-If user wants the first run to be after enabling:
-Use: sudo systemctl enable --now unit-name.path
+Monitors a directory for changes. 
+Automatically runs when files are created/modified. 
+Directory path is taken from DIRECTORY in your .env file. 
+If path is changed in .env file, user must also change the .path file manually. 
+Use for real-time reviews as you update code. 
+⚠️ Path cannot contain spaces. 
+Enabled with: sudo systemctl enable unit-name.path. 
+If user wants the first run to be after enabling,
+use: sudo systemctl enable --now unit-name.path
